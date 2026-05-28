@@ -200,7 +200,7 @@ export default function HomePage() {
             <div className="px-5 py-4">
               <Button
                 className="w-full h-11"
-                onClick={() => router.push(`/app/treinos/${todaySession.id}`)}
+                onClick={() => router.push(`/treinos/${todaySession.id}`)}
               >
                 Iniciar treino
               </Button>
