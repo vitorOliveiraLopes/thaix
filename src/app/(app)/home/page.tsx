@@ -37,28 +37,28 @@ export default function HomePage() {
     error,
   } = useHomeData()
 
-    const [hydration, setHydration] = useState(hydrationToday)
+    const [hydration, setHydration] = useState<boolean | null>(null)
+    const hydrationValue = hydration ?? hydrationToday
 
     async function handleToggleHydration() {
-        const supabase = createClient()
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-        const today = new Date().toISOString().split('T')[0]
-        const newValue = !hydration
+      // Sempre usa a data atual no momento do clique
+      const today = new Date().toISOString().split('T')[0]
+      const newValue = !hydration
 
-        // Atualiza UI imediatamente (optimistic update)
-        setHydration(newValue)
+      setHydration(newValue)
 
-        const { error } = await supabase
-            .from('hydration_days')
-            .upsert(
-            { user_id: user.id, date: today, met_goal: newValue },
-            { onConflict: 'user_id,date' }
-            )
+      const { error } = await supabase
+        .from('hydration_days')
+        .upsert(
+          { user_id: user.id, date: today, met_goal: newValue },
+          { onConflict: 'user_id,date' }
+        )
 
-        // Se falhou, reverte
-        if (error) setHydration(!newValue)
+      if (error) setHydration(!newValue)
     }
 
   const coachPhrase = COACH_PHRASES[new Date().getDay() % COACH_PHRASES.length]
@@ -116,28 +116,28 @@ export default function HomePage() {
             onClick={handleToggleHydration}
             className={cn(
               "rounded-2xl p-4 flex items-center gap-3 transition-all",
-              hydration 
+              hydrationValue 
                 ? "bg-blue-100 dark:bg-blue-900/30"
                 : "bg-muted"
             )}
           >
             <div className={cn(
               "w-10 h-10 rounded-xl flex items-center justify-center",
-              hydrationToday
+              hydrationValue
                 ? "bg-blue-200 dark:bg-blue-800/50"
                 : "bg-background"
             )}>
               <Droplets className={cn(
                 "w-5 h-5",
-                hydrationToday ? "text-blue-500" : "text-muted-foreground"
+                hydrationValue ? "text-blue-500" : "text-muted-foreground"
               )} />
             </div>
             <div className="text-left">
               <p className="text-sm font-medium">
-                {hydration ? 'Hidratado!' : 'Água'}
+                {hydrationValue ? 'Hidratado!' : 'Água'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {hydration ? 'Meta batida ✓' : 'Marcar meta'}
+                {hydrationValue ? 'Meta batida ✓' : 'Marcar meta'}
               </p>
             </div>
           </button>
