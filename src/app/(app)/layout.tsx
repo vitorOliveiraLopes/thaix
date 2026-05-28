@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { BottomNav } from '@/components/layout/BottomNav'
 
 export default async function AppLayout({
   children,
@@ -14,6 +15,7 @@ export default async function AppLayout({
   return (
     <div className="min-h-screen bg-background">
       {children}
+      <BottomNav />
     </div>
   )
 }
