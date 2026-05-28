@@ -60,7 +60,7 @@ export default function OnboardingProtocolo() {
       'onboarding_pullups','onboarding_squats','onboarding_protocol']
       .forEach(k => sessionStorage.removeItem(k))
 
-    router.push('/app/home')
+    router.push('/home')
   }
 
   const info = protocol ? PROTOCOL_LABELS[protocol] : null

@@ -29,7 +29,7 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/app/home')
+    router.push('/home')
     router.refresh()
   }
 

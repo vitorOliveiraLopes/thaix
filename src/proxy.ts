@@ -32,12 +32,12 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && ['/login', '/signup'].includes(request.nextUrl.pathname)) {
-    return NextResponse.redirect(new URL('/app/home', request.url))
+    return NextResponse.redirect(new URL('/home', request.url))
   }
 
   return supabaseResponse
 }
 
 export const config = {
-  matcher: ['/app/:path*', '/login', '/signup'],
+  matcher: ['/home/:path*', '/treinos/:path*', '/cursos/:path*', '/perfil/:path*', '/login', '/signup'],
 }
