@@ -97,32 +97,51 @@ export default function CoursePage() {
   }, [courseId])
 
   async function handleToggleLesson(lessonId: string, isCompleted: boolean) {
-    setCompleting(lessonId)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+        setCompleting(lessonId)
 
-    if (isCompleted) {
-      await supabase
-        .from('course_lessons_completed')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('lesson_id', lessonId)
-    } else {
-      await supabase
-        .from('course_lessons_completed')
-        .upsert({ user_id: user.id, lesson_id: lessonId },
-          { onConflict: 'user_id,lesson_id' })
-    }
+        // Optimistic update
+        setModules(prev => prev.map(mod => ({
+            ...mod,
+            lessons: mod.lessons.map(l =>
+            l.id === lessonId ? { ...l, completed: !isCompleted } : l
+            ),
+        })))
 
-    setModules(prev => prev.map(mod => ({
-      ...mod,
-      lessons: mod.lessons.map(l =>
-        l.id === lessonId ? { ...l, completed: !isCompleted } : l
-      ),
-    })))
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { setCompleting(null); return }
 
-    setCompleting(null)
+        let error = null
+
+        if (isCompleted) {
+            const res = await supabase
+            .from('course_lessons_completed')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('lesson_id', lessonId)
+            error = res.error
+            } else {
+            const res = await supabase
+            .from('course_lessons_completed')
+            .upsert(
+                { user_id: user.id, lesson_id: lessonId },
+                { onConflict: 'user_id,lesson_id' }
+            )
+            error = res.error
+        }
+
+        // Se falhou, reverte o optimistic update
+        if (error) {
+            console.error('Erro ao salvar progresso da aula:', error)
+            setModules(prev => prev.map(mod => ({
+            ...mod,
+            lessons: mod.lessons.map(l =>
+                l.id === lessonId ? { ...l, completed: isCompleted } : l
+            ),
+            })))
+        }
+
+        setCompleting(null)
   }
 
   function formatDuration(seconds: number | null): string {

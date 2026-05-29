@@ -13,6 +13,14 @@ export default function ConclusaoPage() {
   const [streak, setStreak] = useState(0)
 
   useEffect(() => {
+    const nav = document.querySelector('nav')
+    if (nav) nav.style.display = 'none'
+    return () => {
+      if (nav) nav.style.display = ''
+    }
+  }, [])
+
+  useEffect(() => {
     async function load() {
       const supabase = createClient()
 

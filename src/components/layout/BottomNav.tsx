@@ -2,15 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Dumbbell, BookOpen, Users, User } from 'lucide-react'
+import { Home, Dumbbell, BookOpen, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
-  { href: '/home',      label: 'Início',    icon: Home },
-  { href: '/treinos',   label: 'Treinos',   icon: Dumbbell },
-  { href: '/cursos',    label: 'Cursos',    icon: BookOpen },
-  { href: '/comunidade',label: 'Comunidade',icon: Users },
-  { href: '/perfil',    label: 'Perfil',    icon: User },
+  { href: '/home',    label: 'Início',   icon: Home },
+  { href: '/treinos', label: 'Treinos',  icon: Dumbbell },
+  { href: '/cursos',  label: 'Cursos',   icon: BookOpen },
+  { href: '/perfil',  label: 'Perfil',   icon: User },
 ]
 
 export function BottomNav() {

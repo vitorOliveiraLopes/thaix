@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { Session, SessionItem, Exercise } from '@/types/database'
 import { ChevronLeft, ChevronRight, Timer } from 'lucide-react'
+import { evaluateAchievements } from '@/lib/achievements'
 
 type ItemWithExercise = SessionItem & { exercise: Exercise }
 
@@ -23,6 +24,14 @@ export default function TreinoPage() {
   const [timer, setTimer] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  
+  useEffect(() => {
+    const nav = document.querySelector('nav')
+    if (nav) nav.style.display = 'none'
+    return () => {
+      if (nav) nav.style.display = ''
+    }
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -104,6 +113,8 @@ export default function TreinoPage() {
       user_id: user.id,
       session_id: sessionId,
     })
+
+    await evaluateAchievements(supabase, user.id, sessionId as string)
 
     // Atualiza progresso — adiciona sessão à lista e avança o dia
     const { data: progress } = await supabase
