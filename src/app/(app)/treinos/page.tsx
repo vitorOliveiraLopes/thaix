@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Flame, Dumbbell, Clock, Droplets, Plus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PainChart } from '@/components/app/PainChart'
 
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 const WEEKDAYS = ['D','S','T','Q','Q','S','S']
@@ -219,13 +220,26 @@ export default function TreinosPage() {
           {lastWeight && (
             <div className="border-t border-border pt-3">
               <p className="text-xs text-muted-foreground">
-                Último registro: <span className="font-medium text-foreground">{lastWeight.weight_kg} kg</span> em {lastWeight.date}
+                Último registro:{' '}
+                <span className="font-medium text-foreground">{lastWeight.weight_kg} kg</span>{' '}
+                em {lastWeight.date}
               </p>
             </div>
           )}
         </div>
 
-        {/* Conquistas — link para seção */}
+        {/* Dor */}
+        <div className="border rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-medium">Evolução da dor</h2>
+            <span className="text-xs text-muted-foreground">
+              {data.painLogs.length} registros
+            </span>
+          </div>
+          <PainChart logs={data.painLogs} />
+        </div>
+
+        {/* Conquistas */}
         <button
           onClick={() => router.push('/treinos/conquistas')}
           className="w-full border rounded-2xl p-5 flex items-center justify-between hover:bg-muted/30 transition-colors"
@@ -239,8 +253,23 @@ export default function TreinosPage() {
           <span className="text-2xl">🏆</span>
         </button>
 
+        {/* PRs */}
+        <button
+          onClick={() => router.push('/treinos/prs')}
+          className="w-full border rounded-2xl p-5 flex items-center justify-between hover:bg-muted/30 transition-colors"
+        >
+          <div className="space-y-0.5 text-left">
+            <h2 className="font-medium">Recordes Pessoais</h2>
+            <p className="text-sm text-muted-foreground">
+              Acompanhe seus melhores resultados
+            </p>
+          </div>
+          <span className="text-2xl">🥇</span>
+        </button>
+
       </div>
 
+      {/* Modal peso */}
       {showWeightModal && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100] flex items-end pb-16">
           <div className="w-full max-w-md mx-auto bg-background border border-border rounded-t-2xl p-6 space-y-4">
