@@ -4,21 +4,19 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { saveMotivacao } from '@/lib/onboarding-persist'
+import { saveTrava } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
 const OPTIONS = [
-  { value: 'primeira-pullup',  label: 'Quero minha primeira pull-up strict', icon: '🏆' },
-  { value: 'kipping',          label: 'Quero destravar kipping/butterfly',   icon: '🔄' },
-  { value: 'muscle-up',        label: 'Quero meu primeiro muscle-up',        icon: '🔥' },
-  { value: 'hspu',             label: 'Quero o HSPU (handstand push-up)',    icon: '🤸' },
-  { value: 'gluteo',           label: 'Quero glúteo forte pra CrossFit',     icon: '💪' },
-  { value: 'wods',             label: 'Quero render mais nos WODs',          icon: '⚡' },
-  { value: 'explorando',       label: 'Tô só explorando',                    icon: '🧭' },
+  { value: 'tecnica',   label: 'Trava em técnica que ninguém me explica',    icon: '❓' },
+  { value: 'creators',  label: 'Fico intimidada pelos creators avançados',   icon: '😟' },
+  { value: 'tempo',     label: 'Sem tempo entre as aulas e a vida',          icon: '🕐' },
+  { value: 'wod',       label: 'Minha box só foca no WOD do dia',            icon: '⚠️' },
+  { value: 'outro',     label: 'Outro',                                       icon: '···' },
 ]
 
-export default function OnboardingMotivacao() {
+export default function OnboardingTrava() {
   const router = useRouter()
   const [selected, setSelected] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -28,15 +26,15 @@ export default function OnboardingMotivacao() {
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) await saveMotivacao(user.id, selected)
-    router.push('/onboarding/como-conheceu')
+    if (user) await saveTrava(user.id, selected)
+    router.push('/onboarding/teste-fisico')
   }
 
   return (
     <div className="flex flex-col min-h-screen max-w-sm mx-auto w-full">
-      <OnboardingHeader backHref="/onboarding/apresentacao" />
+      <OnboardingHeader backHref="/onboarding/skills" />
       <div className="flex-1 flex flex-col px-5 py-4">
-        <CoachBubble title="O que te trouxe aqui?" subtitle="Pode escolher só uma. A gente ajusta o tom do app pra você." />
+        <CoachBubble title="O que costuma te travar?" subtitle="Sem julgamento. Já vi de tudo na consultoria." />
         <div className="flex flex-col gap-2">
           {OPTIONS.map((opt) => (
             <button key={opt.value} onClick={() => setSelected(opt.value)}

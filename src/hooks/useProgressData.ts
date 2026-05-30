@@ -32,6 +32,7 @@ export type ProgressData = {
   currentStreak: number
   maxStreak: number
   totalMinutes: number
+  heightCm: number | null
   loading: boolean
 }
 
@@ -45,6 +46,7 @@ export function useProgressData() {
     currentStreak: 0,
     maxStreak: 0,
     totalMinutes: 0,
+    heightCm: null,
     loading: true,
   })
 
@@ -54,7 +56,7 @@ export function useProgressData() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const [workoutsRes, weightRes, painRes, hydrationRes] = await Promise.all([
+        const [workoutsRes, weightRes, painRes, hydrationRes, profileRes] = await Promise.all([
         supabase
           .from('workouts_completed')
           .select('completed_at, session_id')
@@ -75,6 +77,11 @@ export function useProgressData() {
           .select('date, met_goal')
           .eq('user_id', user.id)
           .order('date', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('height_cm')
+          .eq('user_id', user.id)
+          .single(),
       ])
 
       const workouts = workoutsRes.data ?? []
@@ -97,6 +104,7 @@ export function useProgressData() {
         currentStreak,
         maxStreak,
         totalMinutes,
+        heightCm: profileRes.data?.height_cm ?? null,
         loading: false,
       })
     }

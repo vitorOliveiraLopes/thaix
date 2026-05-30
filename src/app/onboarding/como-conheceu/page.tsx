@@ -4,39 +4,37 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { saveMotivacao } from '@/lib/onboarding-persist'
+import { saveComoConheceu } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
 const OPTIONS = [
-  { value: 'primeira-pullup',  label: 'Quero minha primeira pull-up strict', icon: '🏆' },
-  { value: 'kipping',          label: 'Quero destravar kipping/butterfly',   icon: '🔄' },
-  { value: 'muscle-up',        label: 'Quero meu primeiro muscle-up',        icon: '🔥' },
-  { value: 'hspu',             label: 'Quero o HSPU (handstand push-up)',    icon: '🤸' },
-  { value: 'gluteo',           label: 'Quero glúteo forte pra CrossFit',     icon: '💪' },
-  { value: 'wods',             label: 'Quero render mais nos WODs',          icon: '⚡' },
-  { value: 'explorando',       label: 'Tô só explorando',                    icon: '🧭' },
+  { value: 'instagram', label: 'Reels da @thaixskill',    icon: '📸' },
+  { value: 'tiktok',    label: 'TikTok',                  icon: '🎵' },
+  { value: 'youtube',   label: 'YouTube',                  icon: '▶️' },
+  { value: 'indicacao', label: 'Indicação na minha box',  icon: '🤝' },
+  { value: 'coach',     label: 'Pelo meu coach / box',    icon: '🏠' },
+  { value: 'outro',     label: 'Outro',                   icon: '⭕' },
 ]
 
-export default function OnboardingMotivacao() {
+export default function OnboardingComoConheceu() {
   const router = useRouter()
   const [selected, setSelected] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   async function handleNext() {
-    if (!selected) return
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) await saveMotivacao(user.id, selected)
-    router.push('/onboarding/como-conheceu')
+    if (user) await saveComoConheceu(user.id, selected ?? 'nao-informado')
+    router.push('/onboarding/skills')
   }
 
   return (
     <div className="flex flex-col min-h-screen max-w-sm mx-auto w-full">
-      <OnboardingHeader backHref="/onboarding/apresentacao" />
+      <OnboardingHeader backHref="/onboarding/motivacao" />
       <div className="flex-1 flex flex-col px-5 py-4">
-        <CoachBubble title="O que te trouxe aqui?" subtitle="Pode escolher só uma. A gente ajusta o tom do app pra você." />
+        <CoachBubble title="Como você conheceu a Thaix?" subtitle="Opcional. Ajuda a gente a entender de onde vem a galera." />
         <div className="flex flex-col gap-2">
           {OPTIONS.map((opt) => (
             <button key={opt.value} onClick={() => setSelected(opt.value)}
@@ -54,7 +52,7 @@ export default function OnboardingMotivacao() {
         </div>
       </div>
       <div className="px-5 pb-8">
-        <button onClick={handleNext} disabled={!selected || saving}
+        <button onClick={handleNext} disabled={saving}
           className="w-full h-14 bg-primary text-white font-bold text-base rounded-full hover:bg-primary/90 transition-colors disabled:opacity-40">
           {saving ? 'Salvando...' : 'Continuar'}
         </button>

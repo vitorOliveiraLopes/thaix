@@ -189,23 +189,30 @@ export default function TreinosPage() {
           </div>
         </div>
 
-        {/* Peso */}
+        {/* Peso & Altura */}
         <div className="border rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-medium">Peso</h2>
+            <h2 className="font-medium">Corpo</h2>
             <button
               onClick={() => setShowWeightModal(true)}
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Registrar
+              Registrar peso
             </button>
           </div>
 
+          {/* Altura — vem do perfil (onboarding) */}
+          {data.heightCm && (
+            <div className="flex justify-between text-sm border-b border-border pb-3">
+              <span className="text-muted-foreground">Altura</span>
+              <span className="font-medium">{data.heightCm} cm</span>
+            </div>
+          )}
+
+          {/* Peso — histórico de weight_logs */}
           {data.weightLogs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nenhum registro ainda.
-            </p>
+            <p className="text-sm text-muted-foreground">Nenhum registro de peso ainda.</p>
           ) : (
             <div className="space-y-2">
               {data.weightLogs.slice(-5).reverse().map((log, i) => (

@@ -1,62 +1,56 @@
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-foreground flex flex-col relative overflow-hidden">
 
-      {/* Header */}
-      <header className="px-6 pt-8 flex items-center justify-between max-w-md mx-auto w-full">
-        <span className="font-semibold tracking-tight">ThaixSkill</span>
-        <Link href="/login">
-          <Button variant="ghost" size="sm">Entrar</Button>
-        </Link>
-      </header>
+      {/* Fundo escuro com imagem da coach — simulado com gradiente até termos a foto */}
+      <div className="absolute inset-0 bg-gradient-to-b from-foreground/60 via-foreground/20 to-foreground/95 z-10" />
 
-      {/* Hero */}
-      <main className="flex-1 flex flex-col items-center justify-center px-6 text-center max-w-md mx-auto w-full">
-        <div className="space-y-6">
+      {/* Placeholder da foto hero — substitua por <Image> quando tiver o asset */}
+      <div className="absolute inset-0 bg-[oklch(0.17_0_0)]">
+        {/* <Image src="/hero-thaix.jpg" alt="Coach Thaix" fill className="object-cover object-top" priority /> */}
+      </div>
+
+      {/* Conteúdo */}
+      <div className="relative z-20 flex flex-col min-h-screen max-w-sm mx-auto w-full px-6">
+
+        {/* Logo */}
+        <header className="pt-14 pb-4">
+          <span className="text-xs font-bold tracking-[0.2em] text-primary uppercase">
+            THAIXSKILL
+          </span>
+        </header>
+
+        {/* Hero text — empurrado para baixo */}
+        <main className="flex-1 flex flex-col justify-end pb-10">
+          <div className="space-y-4 mb-8">
+            <h1 className="text-4xl font-extrabold leading-tight text-white">
+              Destrave os skills do CrossFit.{' '}
+              <em className="text-primary not-italic">NO SEU RITMO.</em>
+            </h1>
+            <p className="text-white/70 text-base leading-relaxed">
+              O complemento da sua box: pull-up, toes-to-bar,
+              muscle-up, HSPU e mais — com a base que ninguém te ensina.
+            </p>
+          </div>
 
           <div className="space-y-3">
-            <p className="text-sm font-medium text-muted-foreground uppercase tracking-widest">
-              Calistenia · CrossFit · Skills
-            </p>
-            <h1 className="text-4xl font-semibold tracking-tight leading-tight">
-              Treine com método.<br />Evolua de verdade.
-            </h1>
-            <p className="text-muted-foreground text-base leading-relaxed">
-              Um protocolo personalizado de 28 dias com a Coach Thais.
-              Do iniciante ao muscle-up.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 w-full">
-            <Link href="/signup" className="w-full">
-              <Button className="w-full h-12 text-base">
-                Começar grátis por 7 dias
-              </Button>
+            <Link
+              href="/signup"
+              className="block w-full h-14 bg-primary text-white font-bold text-base rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors"
+            >
+              Começar
             </Link>
-            <Link href="/login" className="w-full">
-              <Button variant="outline" className="w-full h-12">
-                Já tenho conta
-              </Button>
+            <Link
+              href="/login"
+              className="block w-full text-center text-white/70 text-sm py-2 hover:text-white transition-colors"
+            >
+              Já tenho minha conta
             </Link>
           </div>
-
-          <p className="text-xs text-muted-foreground">
-            Sem cartão de crédito · Cancele quando quiser
-          </p>
-
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="px-6 pb-8 text-center">
-        <p className="text-xs text-muted-foreground">
-          © 2026 ThaixSkill · Todos os direitos reservados
-        </p>
-      </footer>
-
+        </main>
+      </div>
     </div>
   )
 }
