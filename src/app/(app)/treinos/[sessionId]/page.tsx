@@ -114,7 +114,13 @@ export default function TreinoPage() {
       session_id: sessionId,
     })
 
-    await evaluateAchievements(supabase, user.id, sessionId as string)
+    const newAchievements = await evaluateAchievements(supabase, user.id, sessionId as string)
+
+    if (newAchievements.length > 0) {
+      sessionStorage.setItem('new_achievements', JSON.stringify(newAchievements))
+    } else {
+      sessionStorage.removeItem('new_achievements')
+    }
 
     // Atualiza progresso — adiciona sessão à lista e avança o dia
     const { data: progress } = await supabase

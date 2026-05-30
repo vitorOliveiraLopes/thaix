@@ -5,12 +5,23 @@ import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import type { Session } from '@/types/database'
+import { AchievementModal } from '@/components/app/AchievementModal'
 
 export default function ConclusaoPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const router = useRouter()
   const [session, setSession] = useState<Session | null>(null)
   const [streak, setStreak] = useState(0)
+  const [newAchievementIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const stored = sessionStorage.getItem('new_achievements')
+      return stored ? JSON.parse(stored) : []
+    } catch {
+      return []
+    }
+  })
+  const [showAchievements, setShowAchievements] = useState(true)
 
   useEffect(() => {
     const nav = document.querySelector('nav')
@@ -95,7 +106,15 @@ export default function ConclusaoPage() {
           Voltar para home
         </Button>
       </div>
-
+      {showAchievements && newAchievementIds.length > 0 && (
+        <AchievementModal
+          achievementIds={newAchievementIds}
+          onClose={() => {
+            setShowAchievements(false)
+            sessionStorage.removeItem('new_achievements')
+          }}
+        />
+      )}
     </div>
   )
 }
