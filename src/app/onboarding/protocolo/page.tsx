@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { PROTOCOL_LABELS } from '@/lib/onboarding'
-import { getRecommendedProtocol, markOnboardingComplete } from '@/lib/onboarding-persist'
+import { getRecommendedProtocol, markOnboardingComplete, saveCurrentStep } from '@/lib/onboarding-persist'
 
 export default function OnboardingProtocolo() {
   const router = useRouter()
@@ -32,6 +32,7 @@ export default function OnboardingProtocolo() {
 
     // Marca onboarding completo
     await markOnboardingComplete(user.id)
+    await saveCurrentStep(user.id, 'completo')
 
     router.push('/paywall')
   }

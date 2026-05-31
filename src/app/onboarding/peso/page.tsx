@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { savePesoAltura } from '@/lib/onboarding-persist'
+import { savePesoAltura, saveCurrentStep } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -79,6 +79,7 @@ export default function OnboardingPeso() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       await savePesoAltura(user.id, peso, altura)
+      await saveCurrentStep(user.id, 'protocolo')
     }
     router.push('/onboarding/protocolo')
   }

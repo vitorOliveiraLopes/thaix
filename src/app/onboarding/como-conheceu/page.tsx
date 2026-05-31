@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { saveComoConheceu } from '@/lib/onboarding-persist'
+import { saveComoConheceu, saveCurrentStep } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -26,7 +26,10 @@ export default function OnboardingComoConheceu() {
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) await saveComoConheceu(user.id, selected ?? 'nao-informado')
+    if (user) {
+      await saveComoConheceu(user.id, selected ?? 'nao-informado')
+      await saveCurrentStep(user.id, 'skills')
+    }
     router.push('/onboarding/skills')
   }
 

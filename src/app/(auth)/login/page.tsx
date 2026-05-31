@@ -29,7 +29,6 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/home')
     router.refresh()
   }
 

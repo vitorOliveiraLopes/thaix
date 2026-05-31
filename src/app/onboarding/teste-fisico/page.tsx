@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Slider } from '@/components/ui/slider'
 import { createClient } from '@/lib/supabase/client'
-import { saveTesteFisico } from '@/lib/onboarding-persist'
+import { saveTesteFisico, saveCurrentStep } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -43,6 +43,7 @@ export default function OnboardingTesteFisico() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       await saveTesteFisico(user.id, values.pushups, values.pullups, values.squats)
+      await saveCurrentStep(user.id, 'frequencia')
     }
     router.push('/onboarding/frequencia')
   }

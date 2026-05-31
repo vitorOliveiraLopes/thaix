@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { saveTrava } from '@/lib/onboarding-persist'
+import { saveTrava, saveCurrentStep } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -26,7 +26,10 @@ export default function OnboardingTrava() {
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) await saveTrava(user.id, selected)
+    if (user) {
+      await saveTrava(user.id, selected)
+      await saveCurrentStep(user.id, 'teste-fisico')
+    }
     router.push('/onboarding/teste-fisico')
   }
 

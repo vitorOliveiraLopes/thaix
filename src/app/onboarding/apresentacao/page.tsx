@@ -11,7 +11,6 @@ export default function OnboardingApresentacao() {
       <OnboardingHeader />
 
       <div className="flex-1 flex flex-col px-5 py-6">
-        {/* Avatar grande da coach */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-24 h-24 rounded-full bg-primary/20 border-4 border-primary/30 flex items-center justify-center mb-4">
             <span className="text-4xl font-extrabold text-primary">T</span>

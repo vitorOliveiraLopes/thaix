@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { saveSkills } from '@/lib/onboarding-persist'
+import { saveSkills, saveCurrentStep } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -33,7 +33,10 @@ export default function OnboardingSkills() {
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) await saveSkills(user.id, selected)
+    if (user) {
+      await saveSkills(user.id, selected)
+      await saveCurrentStep(user.id, 'trava')
+    }
     router.push('/onboarding/trava')
   }
 

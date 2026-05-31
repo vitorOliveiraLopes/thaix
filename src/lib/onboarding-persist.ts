@@ -123,3 +123,10 @@ export async function getRecommendedProtocol(userId: string): Promise<string> {
     .single()
   return data?.protocol_recommended ?? 'iniciante'
 }
+
+export async function saveCurrentStep(userId: string, step: string) {
+  const supabase = createClient()
+  await supabase
+    .from('onboarding_responses')
+    .upsert({ user_id: userId, current_step: step }, { onConflict: 'user_id' })
+}

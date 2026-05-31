@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { saveFrequencia, saveHorarios } from '@/lib/onboarding-persist'
+import { saveFrequencia, saveCurrentStep, saveHorarios } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -50,6 +50,7 @@ export default function OnboardingFrequencia() {
       await Promise.all([
         saveFrequencia(user.id, freq, activeDays),
         saveHorarios(user.id, horarioTreino, horarioHidratacao),
+        saveCurrentStep(user.id, 'peso'),
       ])
     }
 

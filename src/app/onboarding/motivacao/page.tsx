@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { saveMotivacao } from '@/lib/onboarding-persist'
+import { saveMotivacao, saveCurrentStep } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -28,7 +28,10 @@ export default function OnboardingMotivacao() {
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) await saveMotivacao(user.id, selected)
+    if (user) {
+      await saveMotivacao(user.id, selected)
+      await saveCurrentStep(user.id, 'como-conheceu') // próximo step
+    }
     router.push('/onboarding/como-conheceu')
   }
 
