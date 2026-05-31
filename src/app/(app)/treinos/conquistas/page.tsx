@@ -144,7 +144,7 @@ export default function ConquistasPage() {
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-widest">
             Exercícios desbloqueados
           </h2>
-          <div className="border rounded-2xl divide-y divide-border overflow-hidden">
+          <div className="bg-white rounded-2xl divide-y divide-border overflow-hidden shadow-sm">
             {exerciseAchievements.map(a => (
               <div
                 key={a.id}

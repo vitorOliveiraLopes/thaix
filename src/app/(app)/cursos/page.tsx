@@ -78,7 +78,7 @@ export default function CursosPage() {
       <div className="max-w-md mx-auto px-4 pt-10 space-y-6">
 
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Cursos</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight">Cursos</h1>
           <p className="text-sm text-muted-foreground">
             Aprenda as técnicas com a Coach Aurora
           </p>

@@ -93,7 +93,7 @@ export default function NotificacoesPage() {
           <h1 className="text-xl font-semibold">Notificações</h1>
         </div>
 
-        <div className="border rounded-2xl divide-y divide-border overflow-hidden">
+        <div className="bg-white rounded-2xl divide-y divide-border overflow-hidden shadow-sm">
 
           {/* Treino */}
           <div className="p-5 space-y-4">

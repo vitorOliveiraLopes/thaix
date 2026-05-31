@@ -55,7 +55,7 @@ function MonthCalendar({
                 {day}
               </div>
               {isHydration && (
-                <div className="w-1 h-1 rounded-full bg-blue-400" />
+                <div className="w-1 h-1 rounded-full bg-primary" />
               )}
             </div>
           )
@@ -120,7 +120,7 @@ export default function TreinosPage() {
     <div className="min-h-screen bg-background pb-24">
       <div className="max-w-md mx-auto px-4 pt-10 space-y-6">
 
-        <h1 className="text-2xl font-semibold tracking-tight">Progresso</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight">Progresso</h1>
 
         {/* Totais */}
         <div className="grid grid-cols-3 gap-3">
@@ -144,10 +144,10 @@ export default function TreinosPage() {
         </div>
 
         {/* Streak */}
-        <div className="border rounded-2xl p-5 flex justify-between">
+        <div className="bg-white rounded-2xl p-5 flex justify-between shadow-sm">
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center gap-1">
-              <Flame className="w-4 h-4 text-orange-500" />
+              <Flame className="w-4 h-4 text-primary" />
               <span className="text-2xl font-bold tabular-nums">{data.currentStreak}</span>
             </div>
             <p className="text-xs text-muted-foreground">sequência atual</p>
@@ -163,7 +163,7 @@ export default function TreinosPage() {
         </div>
 
         {/* Calendários */}
-        <div className="border rounded-2xl p-5 space-y-6">
+        <div className="bg-white rounded-2xl p-5 space-y-6 shadow-sm">
           <MonthCalendar
             year={prevYear}
             month={prevMonth}
@@ -183,14 +183,14 @@ export default function TreinosPage() {
               <span>Treino</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
               <span>Hidratação</span>
             </div>
           </div>
         </div>
 
         {/* Peso & Altura */}
-        <div className="border rounded-2xl p-5 space-y-4">
+        <div className="bg-white rounded-2xl p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="font-medium">Corpo</h2>
             <button
@@ -236,7 +236,7 @@ export default function TreinosPage() {
         </div>
 
         {/* Dor */}
-        <div className="border rounded-2xl p-5 space-y-4">
+        <div className="bg-white rounded-2xl p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="font-medium">Evolução da dor</h2>
             <span className="text-xs text-muted-foreground">

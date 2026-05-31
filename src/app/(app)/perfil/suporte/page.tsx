@@ -20,7 +20,7 @@ export default function SuportePage() {
           <h1 className="text-xl font-semibold">Ajuda e Suporte</h1>
         </div>
 
-        <div className="border rounded-2xl divide-y divide-border overflow-hidden">
+        <div className="bg-white rounded-2xl divide-y divide-border overflow-hidden shadow-sm">
           <button
             onClick={() => window.open('https://wa.me/5524998315673', '_blank')}
             className="w-full flex items-center gap-4 px-5 py-4 hover:bg-muted/50 transition-colors text-left"

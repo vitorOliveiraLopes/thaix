@@ -74,11 +74,11 @@ export default function PerfilPage() {
 
         {/* Header */}
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-            <User className="w-8 h-8 text-muted-foreground" />
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+            <User className="w-8 h-8 text-primary" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold">
+            <h1 className="text-xl font-extrabold">
               {profile?.name ?? 'Atleta'}
             </h1>
             <p className="text-sm text-muted-foreground">{profile?.email}</p>
@@ -86,7 +86,7 @@ export default function PerfilPage() {
         </div>
 
         {/* Assinatura */}
-        <div className="border rounded-2xl p-5 space-y-4">
+        <div className="bg-white rounded-2xl p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Crown className="w-4 h-4" />
@@ -121,7 +121,7 @@ export default function PerfilPage() {
         </div>
 
         {/* Menu */}
-        <div className="border rounded-2xl divide-y divide-border">
+        <div className="bg-white rounded-2xl divide-y divide-border shadow-sm">
           <button
             className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/50 transition-colors"
             onClick={() => router.push('/perfil/notificacoes')}

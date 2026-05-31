@@ -159,7 +159,7 @@ export default function PRsPage() {
 
         {/* Lista de PRs */}
         {Object.keys(bestPRs).length === 0 ? (
-          <div className="border rounded-2xl p-8 text-center space-y-3">
+          <div className="bg-white rounded-2xl p-8 text-center space-y-3 shadow-sm">
             <Trophy className="w-8 h-8 text-muted-foreground mx-auto" />
             <p className="font-medium">Nenhum PR registrado</p>
             <p className="text-sm text-muted-foreground">
@@ -173,7 +173,7 @@ export default function PRsPage() {
             </Button>
           </div>
         ) : (
-          <div className="border rounded-2xl divide-y divide-border overflow-hidden">
+          <div className="bg-white rounded-2xl divide-y divide-border overflow-hidden shadow-sm">
             {Object.values(bestPRs).map(pr => (
               <div key={pr.id} className="flex items-center justify-between px-5 py-4">
                 <div className="space-y-0.5">
@@ -201,7 +201,7 @@ export default function PRsPage() {
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-widest">
               Histórico
             </h2>
-            <div className="border rounded-2xl divide-y divide-border overflow-hidden">
+            <div className="bg-white rounded-2xl divide-y divide-border overflow-hidden shadow-sm">
               {prs.map(pr => (
                 <div key={pr.id} className="flex items-center justify-between px-5 py-3">
                   <div>

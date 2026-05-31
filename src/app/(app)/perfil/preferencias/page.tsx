@@ -88,7 +88,7 @@ export default function PreferenciasPage() {
           <h1 className="text-xl font-semibold">Preferências</h1>
         </div>
 
-        <div className="border rounded-2xl divide-y divide-border overflow-hidden">
+        <div className="bg-white rounded-2xl divide-y divide-border overflow-hidden shadow-sm">
 
           {/* Tema */}
           <div className="p-5 space-y-3">

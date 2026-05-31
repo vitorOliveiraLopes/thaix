@@ -101,7 +101,7 @@ export default function HomePage() {
 
         {/* Saudação */}
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-2xl font-extrabold tracking-tight">
             {getGreeting(profile?.name ?? null)} 👋
           </h1>
           <p className="text-sm text-muted-foreground">{coachPhrase}</p>
@@ -110,8 +110,8 @@ export default function HomePage() {
         {/* Streak + Hidratação + PegaLeve */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-muted rounded-2xl p-4 flex flex-col gap-2">
-            <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center">
-              <Flame className="w-4 h-4 text-orange-500" />
+            <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center">
+              <Flame className="w-4 h-4 text-primary" />
             </div>
             <div>
               <p className="text-2xl font-bold tabular-nums">{streakCount}</p>
@@ -189,12 +189,12 @@ export default function HomePage() {
 
         {/* Treino do dia */}
         {todaySession ? (
-          <div className="border rounded-2xl overflow-hidden">
+          <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
             <div className="bg-muted px-5 py-4">
               <p className="text-xs text-muted-foreground uppercase tracking-widest">
                 Treino do dia
               </p>
-              <h2 className="text-lg font-semibold">{todaySession.title}</h2>
+              <h2 className="text-lg font-extrabold">{todaySession.title}</h2>
               <p className="text-sm text-muted-foreground">
                 ~{todaySession.estimated_minutes} min · {sessionItems.length} exercícios
               </p>
@@ -230,7 +230,7 @@ export default function HomePage() {
             </div>
           </div>
         ) : (
-          <div className="border rounded-2xl p-6 text-center space-y-2">
+          <div className="bg-white rounded-2xl p-6 text-center space-y-2 shadow-sm">
             <p className="font-medium">Nenhum treino para hoje</p>
             <p className="text-sm text-muted-foreground">
               Você completou todas as sessões desta fase!

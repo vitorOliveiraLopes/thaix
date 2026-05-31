@@ -206,7 +206,7 @@ export default function CoursePage() {
                 Módulo {mod.module_number} — {mod.title}
               </h2>
 
-              <div className="border rounded-2xl divide-y divide-border overflow-hidden">
+              <div className="bg-white rounded-2xl divide-y divide-border overflow-hidden shadow-sm">
                 {mod.lessons.map((lesson) => (
                   <div
                     key={lesson.id}
