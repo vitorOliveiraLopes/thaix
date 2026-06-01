@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useProgressData } from '@/hooks/useProgressData'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Flame, Dumbbell, Clock, Droplets, Plus, X } from 'lucide-react'
+import { Flame, Dumbbell, Clock, Droplets, Plus, X, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PainChart } from '@/components/app/PainChart'
 
@@ -72,6 +72,9 @@ export default function TreinosPage() {
   const [showWeightModal, setShowWeightModal] = useState(false)
   const [weightInput, setWeightInput] = useState('')
   const [savingWeight, setSavingWeight] = useState(false)
+  const [editingHeight, setEditingHeight] = useState(false)
+  const [heightInput, setHeightInput] = useState('')
+  const [savingHeight, setSavingHeight] = useState(false)
 
   const workoutDates = new Set(data.workoutDays.map(w => w.date))
   const hydrationDates = new Set(
@@ -105,6 +108,20 @@ export default function TreinosPage() {
     setShowWeightModal(false)
     window.location.reload()
   }
+
+  async function handleSaveHeight() {
+    const value = parseInt(heightInput)
+    if (isNaN(value) || value < 100 || value > 250) return
+    setSavingHeight(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from('profiles').update({ height_cm: value }).eq('user_id', user.id)
+    setSavingHeight(false)
+    setEditingHeight(false)
+    window.location.reload()
+  }
+
 
   if (data.loading) {
     return (
@@ -203,12 +220,43 @@ export default function TreinosPage() {
           </div>
 
           {/* Altura — vem do perfil (onboarding) */}
-          {data.heightCm && (
-            <div className="flex justify-between text-sm border-b border-border pb-3">
-              <span className="text-muted-foreground">Altura</span>
-              <span className="font-medium">{data.heightCm} cm</span>
-            </div>
-          )}
+          <div className="flex justify-between items-center text-sm border-b border-border pb-3">
+            <span className="text-muted-foreground">Altura</span>
+            {editingHeight ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={heightInput}
+                  onChange={e => setHeightInput(e.target.value)}
+                  placeholder={String(data.heightCm ?? '')}
+                  className="w-16 text-right border border-border rounded-lg px-2 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  autoFocus
+                />
+                <span className="text-muted-foreground">cm</span>
+                <button
+                  onClick={handleSaveHeight}
+                  disabled={savingHeight}
+                  className="text-xs font-bold text-primary hover:text-primary/80"
+                >
+                  {savingHeight ? '...' : 'Salvar'}
+                </button>
+                <button
+                  onClick={() => setEditingHeight(false)}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setHeightInput(String(data.heightCm ?? '')); setEditingHeight(true) }}
+                className="flex items-center gap-1 font-medium hover:text-primary transition-colors"
+              >
+                {data.heightCm ? `${data.heightCm} cm` : 'Adicionar'}
+                <Pencil className="w-3 h-3 text-muted-foreground" />
+              </button>
+            )}
+          </div>
 
           {/* Peso — histórico de weight_logs */}
           {data.weightLogs.length === 0 ? (

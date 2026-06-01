@@ -5,8 +5,8 @@ import { useHomeData } from '@/hooks/useHomeData'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { Flame, Droplets } from 'lucide-react'
-import { useState } from 'react'
+import { Flame, Droplets, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { PegaLeveModal } from '@/components/app/PegaLeveModal'
 
 function getGreeting(name: string | null): string {
@@ -32,6 +32,12 @@ const PAIN_LABELS: Record<number, { emoji: string }> = {
   9: { emoji: '🤯' }, 10: { emoji: '💀' },
 }
 
+const HYDRATION_OPTIONS = [1000, 1500, 2000, 2500, 3000, 3500]
+
+function formatMl(ml: number) {
+  return ml >= 1000 ? `${ml / 1000}L` : `${ml}ml`
+}
+
 export default function HomePage() {
   const router = useRouter()
   const {
@@ -47,27 +53,73 @@ export default function HomePage() {
 
   const [hydration, setHydration] = useState<boolean | null>(null)
   const hydrationValue = hydration ?? hydrationToday
+
   const [showPegaLeve, setShowPegaLeve] = useState(false)
   const [painToday, setPainToday] = useState<number | null>(null)
+
+  const [hydrationGoal, setHydrationGoal] = useState(2000)
+  const [showHydrationModal, setShowHydrationModal] = useState(false)
+  const [savingGoal, setSavingGoal] = useState(false)
+
+  // Carregar dor do dia
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const today = new Date().toISOString().split('T')[0]
+      const { data } = await supabase
+        .from('daily_pain_logs')
+        .select('pain_score')
+        .eq('user_id', user.id)
+        .eq('date', today)
+        .maybeSingle()
+      if (data) setPainToday(data.pain_score)
+    }
+    load()
+  }, [])
+
+  // Carregar meta de hidratação do perfil
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase
+        .from('profiles')
+        .select('hydration_goal_ml')
+        .eq('user_id', user.id)
+        .single()
+      if (data?.hydration_goal_ml) setHydrationGoal(data.hydration_goal_ml)
+    }
+    load()
+  }, [])
 
   async function handleToggleHydration() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-
     const today = new Date().toISOString().split('T')[0]
     const newValue = !hydrationValue
-
     setHydration(newValue)
-
     const { error } = await supabase
       .from('hydration_days')
       .upsert(
         { user_id: user.id, date: today, met_goal: newValue },
         { onConflict: 'user_id,date' }
       )
-
     if (error) setHydration(!newValue)
+  }
+
+  async function handleSaveHydrationGoal(ml: number) {
+    setSavingGoal(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from('profiles').update({ hydration_goal_ml: ml }).eq('user_id', user.id)
+    setHydrationGoal(ml)
+    setSavingGoal(false)
+    setShowHydrationModal(false)
   }
 
   const coachPhrase = COACH_PHRASES[new Date().getDay() % COACH_PHRASES.length]
@@ -107,9 +159,11 @@ export default function HomePage() {
           <p className="text-sm text-muted-foreground">{coachPhrase}</p>
         </div>
 
-        {/* Streak + Hidratação + PegaLeve */}
+        {/* Streak + Hidratação + Dor */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-muted rounded-2xl p-4 flex flex-col gap-2">
+
+          {/* Streak */}
+          <div className="bg-white rounded-2xl p-4 flex flex-col gap-2 shadow-sm">
             <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center">
               <Flame className="w-4 h-4 text-primary" />
             </div>
@@ -121,52 +175,48 @@ export default function HomePage() {
             </div>
           </div>
 
+          {/* Hidratação */}
           <button
             onClick={handleToggleHydration}
             className={cn(
-              "rounded-2xl p-4 flex flex-col gap-2 transition-all text-left",
-              hydrationValue
-                ? "bg-blue-100 dark:bg-blue-900/30"
-                : "bg-muted"
+              'rounded-2xl p-4 flex flex-col gap-2 shadow-sm text-left w-full',
+              hydrationValue ? 'bg-primary/10' : 'bg-white'
             )}
           >
-            <div className={cn(
-              "w-8 h-8 rounded-xl flex items-center justify-center",
-              hydrationValue
-                ? "bg-blue-200 dark:bg-blue-800/50"
-                : "bg-background"
-            )}>
-              <Droplets className={cn(
-                "w-4 h-4",
-                hydrationValue ? "text-blue-500" : "text-muted-foreground"
-              )} />
+            <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-sm">
+              <Droplets className={cn('w-4 h-4', hydrationValue ? 'text-primary' : 'text-muted-foreground')} />
             </div>
             <div>
-              <p className="text-sm font-medium">
-                {hydrationValue ? 'Hidratado!' : 'Água'}
-              </p>
               <p className="text-xs text-muted-foreground">
-                {hydrationValue ? 'Meta ✓' : 'Marcar'}
+                {hydrationValue ? 'Meta ✓' : 'Água'}
+              </p>
+              <p
+                onClick={(e) => { e.stopPropagation(); setShowHydrationModal(true) }}
+                className="text-sm font-bold text-foreground hover:text-primary transition-colors cursor-pointer"
+              >
+                {formatMl(hydrationGoal)}
               </p>
             </div>
           </button>
 
+          {/* Dor */}
           <button
             onClick={() => setShowPegaLeve(true)}
-            className="bg-muted rounded-2xl p-4 flex flex-col gap-2 text-left hover:bg-muted/80 transition-colors"
+            className="bg-white rounded-2xl p-4 flex flex-col gap-2 text-left hover:bg-muted/50 transition-colors shadow-sm"
           >
-            <div className="w-8 h-8 bg-background rounded-xl flex items-center justify-center">
+            <div className="w-8 h-8 bg-muted rounded-xl flex items-center justify-center">
               <span className="text-base">
                 {painToday !== null ? PAIN_LABELS[painToday].emoji : '💪'}
               </span>
             </div>
             <div>
-              <p className="text-sm font-medium">Dor</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">Dor</p>
+              <p className="text-sm font-bold">
                 {painToday !== null ? `${painToday}/10` : 'Registrar'}
               </p>
             </div>
           </button>
+
         </div>
 
         {/* Progresso da fase */}
@@ -181,7 +231,7 @@ export default function HomePage() {
           </div>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-foreground rounded-full transition-all"
+              className="h-full bg-primary rounded-full transition-all"
               style={{ width: `${(completedInPhase / 7) * 100}%` }}
             />
           </div>
@@ -222,7 +272,7 @@ export default function HomePage() {
 
             <div className="px-5 py-4">
               <Button
-                className="w-full h-11"
+                className="w-full h-11 rounded-full"
                 onClick={() => router.push(`/treinos/${todaySession.id}`)}
               >
                 Iniciar treino
@@ -249,6 +299,49 @@ export default function HomePage() {
             setShowPegaLeve(false)
           }}
         />
+      )}
+
+      {/* Modal meta de hidratação */}
+      {showHydrationModal && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100] flex items-end pb-16">
+          <div className="w-full max-w-md mx-auto bg-background border border-border rounded-t-2xl p-6 space-y-5">
+
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-lg">Meta de hidratação</h3>
+                <p className="text-sm text-muted-foreground">Escolha sua meta diária de água</p>
+              </div>
+              <button onClick={() => setShowHydrationModal(false)}>
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              {HYDRATION_OPTIONS.map(ml => (
+                <button
+                  key={ml}
+                  onClick={() => handleSaveHydrationGoal(ml)}
+                  disabled={savingGoal}
+                  className={cn(
+                    'py-4 rounded-2xl border text-center transition-all',
+                    hydrationGoal === ml
+                      ? 'bg-primary border-primary text-white'
+                      : 'bg-white border-border hover:border-primary/40'
+                  )}
+                >
+                  <span className="block text-lg font-extrabold">{formatMl(ml)}</span>
+                  <span className="text-xs opacity-70">
+                    {ml < 1000 ? `${ml}ml` : `${ml}ml`}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <p className="text-xs text-muted-foreground text-center">
+              Recomendação: entre 2L e 3L por dia para atletas.
+            </p>
+          </div>
+        </div>
       )}
 
     </div>
