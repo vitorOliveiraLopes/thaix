@@ -106,7 +106,7 @@ export default function ConquistasPage() {
 
         {/* Conquistas de treinos */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-widest">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-widest text-primary">
             Treinos concluídos
           </h2>
           <div className="grid grid-cols-3 gap-3">
@@ -141,7 +141,7 @@ export default function ConquistasPage() {
 
         {/* Conquistas de exercícios */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-widest">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-widest text-primary">
             Exercícios desbloqueados
           </h2>
           <div className="bg-white rounded-2xl divide-y divide-border overflow-hidden shadow-sm">

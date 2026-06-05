@@ -121,7 +121,7 @@ export default function PerfilPage() {
         </div>
 
         {/* Menu */}
-        <div className="bg-white rounded-2xl divide-y divide-border shadow-sm">
+        <div className="bg-white rounded-2xl divide-y divide-border shadow-sm overflow-hidden">
           <button
             className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/50 transition-colors"
             onClick={() => router.push('/perfil/notificacoes')}

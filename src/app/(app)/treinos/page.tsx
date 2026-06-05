@@ -161,17 +161,17 @@ export default function TreinosPage() {
         </div>
 
         {/* Streak */}
-        <div className="bg-white rounded-2xl p-5 flex justify-between shadow-sm">
-          <div className="text-center space-y-1">
-            <div className="flex items-center justify-center gap-1">
+        <div className="bg-white rounded-2xl p-5 flex shadow-sm">
+          <div className="flex-1 flex flex-col items-center justify-center space-y-1">
+            <div className="flex items-center gap-1">
               <Flame className="w-4 h-4 text-primary" />
               <span className="text-2xl font-bold tabular-nums">{data.currentStreak}</span>
             </div>
             <p className="text-xs text-muted-foreground">sequência atual</p>
           </div>
           <div className="w-px bg-border" />
-          <div className="text-center space-y-1">
-            <div className="flex items-center justify-center gap-1">
+          <div className="flex-1 flex flex-col items-center justify-center space-y-1">
+            <div className="flex items-center gap-1">
               <Flame className="w-4 h-4 text-muted-foreground" />
               <span className="text-2xl font-bold tabular-nums">{data.maxStreak}</span>
             </div>

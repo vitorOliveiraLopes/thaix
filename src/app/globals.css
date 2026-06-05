@@ -69,7 +69,7 @@
 /* ── ThaixSkill Design System ── */
 :root {
   /* Background Bone — off-white quente, não branco puro */
-  --background: oklch(0.95 0.012 80);
+  --background: oklch(99.426% 0.00274 84.294);
   --foreground: oklch(0.17 0 0);
 
   /* Cards brancos sobre o fundo bone */

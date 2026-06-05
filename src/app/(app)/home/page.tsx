@@ -5,7 +5,7 @@ import { useHomeData } from '@/hooks/useHomeData'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { Flame, Droplets, X } from 'lucide-react'
+import { Flame, Droplets, X, Pencil } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { PegaLeveModal } from '@/components/app/PegaLeveModal'
 
@@ -176,28 +176,36 @@ export default function HomePage() {
           </div>
 
           {/* Hidratação */}
-          <button
-            onClick={handleToggleHydration}
-            className={cn(
-              'rounded-2xl p-4 flex flex-col gap-2 shadow-sm text-left w-full',
-              hydrationValue ? 'bg-primary/10' : 'bg-white'
-            )}
-          >
-            <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-sm">
-              <Droplets className={cn('w-4 h-4', hydrationValue ? 'text-primary' : 'text-muted-foreground')} />
+          <div onClick={handleToggleHydration} className={cn(
+            'rounded-2xl p-4 flex flex-col gap-2 shadow-sm',
+            hydrationValue ? 'bg-primary/10' : 'bg-white'
+          )}>
+            <div className="flex items-center justify-between">
+              <button
+                // onClick={handleToggleHydration}
+                className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-sm"
+              >
+                <Droplets className={cn('w-4 h-4', hydrationValue ? 'text-primary' : 'text-muted-foreground')} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowHydrationModal(true) }}
+                className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors" />
+              </button>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">
                 {hydrationValue ? 'Meta ✓' : 'Água'}
               </p>
-              <p
-                onClick={(e) => { e.stopPropagation(); setShowHydrationModal(true) }}
-                className="text-sm font-bold text-foreground hover:text-primary transition-colors cursor-pointer"
+              {/* <button
+                onClick={() => setShowHydrationModal(true)}
+                className="text-sm font-bold text-foreground hover:text-primary transition-colors"
               >
                 {formatMl(hydrationGoal)}
-              </p>
+              </button> */}
+              <p>{formatMl(hydrationGoal)}</p>
             </div>
-          </button>
+          </div>
 
           {/* Dor */}
           <button

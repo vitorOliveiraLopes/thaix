@@ -183,7 +183,7 @@ export default function PRsPage() {
                   <p className="text-xs text-muted-foreground">{pr.date}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold tabular-nums">
+                  <p className="text-lg font-bold tabular-nums text-primary">
                     {formatValue(pr)}
                   </p>
                   {pr.notes && (
