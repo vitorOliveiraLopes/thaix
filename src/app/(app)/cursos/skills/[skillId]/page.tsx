@@ -83,24 +83,15 @@ export default function SkillPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    if (video.watched) {
-      // Incrementa watch_count (pode rever quantas vezes quiser)
-      await supabase
-        .from('user_video_progress')
-        .update({ watch_count: video.watch_count + 1, watched_at: new Date().toISOString() })
-        .eq('user_id', user.id)
-        .eq('video_id', video.id)
-    } else {
+    if (!video.watched) {
       await supabase
         .from('user_video_progress')
         .insert({ user_id: user.id, video_id: video.id, watch_count: 1 })
-    }
 
-    setVideos(prev => prev.map(v =>
-      v.id === video.id
-        ? { ...v, watched: true, watch_count: v.watch_count + 1 }
-        : v
-    ))
+      setVideos(prev => prev.map(v =>
+        v.id === video.id ? { ...v, watched: true } : v
+      ))
+    }
     setMarking(null)
   }
 
@@ -199,7 +190,7 @@ export default function SkillPage() {
                   )}
                 >
                   {selectedVideo.watched ? (
-                    <><RotateCcw className="w-4 h-4" /> Rever ({selectedVideo.watch_count}x)</>
+                    <><RotateCcw className="w-4 h-4" /> Rever</>
                   ) : (
                     'Marcar como assistido'
                   )}
@@ -279,9 +270,6 @@ function VideoCard({ video, isSelected, onSelect, onMark, marking }: {
           <div className="flex items-center gap-2 mt-0.5">
             {video.duration_sec && (
               <span className="text-xs text-muted-foreground">{formatDuration(video.duration_sec)}</span>
-            )}
-            {video.watched && video.watch_count > 1 && (
-              <span className="text-xs text-muted-foreground">· {video.watch_count}x assistido</span>
             )}
           </div>
         </div>
