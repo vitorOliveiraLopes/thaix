@@ -15,12 +15,12 @@ export default function PaywallPage() {
   }
 
   const FEATURES_ANUAL = [
-    'Acesso completo a todos os protocolos',
+    'Acesso completo a todos os treinos',
     'Reavaliações ilimitadas',
     'Cancele quando quiser',
   ]
   const FEATURES_MENSAL = [
-    'Todos os protocolos do Thaix',
+    'Todos os treinos do Thaix',
     'Vídeos guiados em HD',
     'Reavaliações periódicas',
     'Suporte da equipe',

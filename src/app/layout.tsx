@@ -10,7 +10,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: "ThaixSkill — Destrave os skills do CrossFit",
-  description: "Protocolo personalizado de calistenia e CrossFit com a Coach Thaix. Do iniciante ao muscle-up.",
+  description: "Treino personalizado de calistenia e CrossFit com a Coach Thaix. Do iniciante ao muscle-up.",
 };
 
 export default function RootLayout({

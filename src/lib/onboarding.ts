@@ -36,17 +36,17 @@ export function getProtocolLevel(pushups: number): string {
 
 export const PROTOCOL_LABELS: Record<string, { name: string; description: string; color: string }> = {
   iniciante: {
-    name: 'Protocolo Iniciante',
+    name: 'Treinos Iniciante',
     description: '28 dias pra construir a base: padrão de movimento e força inicial.',
     color: 'text-emerald-600',
   },
   intermediario: {
-    name: 'Protocolo Intermediário',
+    name: 'Treinos Intermediário',
     description: '28 dias com mais volume e introdução às primeiras skills.',
     color: 'text-blue-600',
   },
   avancado: {
-    name: 'Protocolo Avançado',
+    name: 'Treinos Avançado',
     description: '28 dias avançados: muscle-up, handstand, pistol e força máxima.',
     color: 'text-purple-600',
   },

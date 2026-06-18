@@ -64,7 +64,7 @@ export default function TrocarProtocoloPage() {
       .eq('user_id', user.id)
 
     if (error) {
-      setError('Erro ao trocar protocolo. Tente novamente.')
+      setError('Erro ao trocar treino. Tente novamente.')
       setSaving(false)
       return
     }
@@ -109,7 +109,7 @@ export default function TrocarProtocoloPage() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-xl font-semibold">Trocar protocolo</h1>
+            <h1 className="text-xl font-semibold">Trocar treino</h1>
             <p className="text-sm text-muted-foreground">
               Seu histórico de treinos é preservado
             </p>
@@ -199,7 +199,7 @@ export default function TrocarProtocoloPage() {
             onClick={handleConfirm}
             disabled={saving}
           >
-            {saving ? 'Trocando...' : 'Confirmar troca de protocolo'}
+            {saving ? 'Trocando...' : 'Confirmar troca de treino'}
           </Button>
         )}
 
@@ -209,7 +209,7 @@ export default function TrocarProtocoloPage() {
             className="w-full h-12"
             disabled
           >
-            Este é seu protocolo atual
+            Este é seu treino atual
           </Button>
         )}
 

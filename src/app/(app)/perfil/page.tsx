@@ -139,7 +139,7 @@ export default function PerfilPage() {
           >
             <div className="flex items-center gap-3">
               <Dumbbell className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Trocar protocolo</span>
+              <span className="text-sm font-medium">Trocar treinos</span>
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </button>

@@ -13,7 +13,7 @@ const PLANS = [
     period: '/mês',
     description: 'Flexibilidade total',
     highlight: false,
-    features: ['Acesso completo', 'Todos os protocolos', 'Cursos incluídos'],
+    features: ['Acesso completo', 'Todos os treinos', 'Cursos incluídos'],
   },
   {
     id: 'trimestral',
@@ -22,7 +22,7 @@ const PLANS = [
     period: '/mês',
     description: 'Cobrado R$ 119,70 a cada 3 meses',
     highlight: false,
-    features: ['Acesso completo', 'Todos os protocolos', 'Cursos incluídos'],
+    features: ['Acesso completo', 'Todos os treinos', 'Cursos incluídos'],
   },
   {
     id: 'anual',
@@ -32,7 +32,7 @@ const PLANS = [
     description: 'Cobrado R$ 197,00 por ano · Economia de 72%',
     highlight: true,
     badge: 'Escolha de 87% dos alunos',
-    features: ['Acesso completo', 'Todos os protocolos', 'Cursos incluídos'],
+    features: ['Acesso completo', 'Todos os treinos', 'Cursos incluídos'],
   },
 ]
 
