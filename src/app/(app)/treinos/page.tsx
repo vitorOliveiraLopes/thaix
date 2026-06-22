@@ -69,12 +69,6 @@ export default function TreinosPage() {
   const router = useRouter()
   const data = useProgressData()
   const [now] = useState(() => new Date())
-  const [showWeightModal, setShowWeightModal] = useState(false)
-  const [weightInput, setWeightInput] = useState('')
-  const [savingWeight, setSavingWeight] = useState(false)
-  const [editingHeight, setEditingHeight] = useState(false)
-  const [heightInput, setHeightInput] = useState('')
-  const [savingHeight, setSavingHeight] = useState(false)
 
   const workoutDates = new Set(data.workoutDays.map(w => w.date))
   const hydrationDates = new Set(
@@ -86,43 +80,6 @@ export default function TreinosPage() {
   const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1
   const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear
 
-  async function handleAddWeight() {
-    const value = parseFloat(weightInput.replace(',', '.'))
-    if (isNaN(value) || value <= 0) return
-    setSavingWeight(true)
-
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const today = new Date().toISOString().split('T')[0]
-    await supabase
-      .from('weight_logs')
-      .upsert(
-        { user_id: user.id, date: today, weight_kg: value },
-        { onConflict: 'user_id,date' }
-      )
-
-    setSavingWeight(false)
-    setWeightInput('')
-    setShowWeightModal(false)
-    window.location.reload()
-  }
-
-  async function handleSaveHeight() {
-    const value = parseInt(heightInput)
-    if (isNaN(value) || value < 100 || value > 250) return
-    setSavingHeight(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('profiles').update({ height_cm: value }).eq('user_id', user.id)
-    setSavingHeight(false)
-    setEditingHeight(false)
-    window.location.reload()
-  }
-
-
   if (data.loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -130,8 +87,6 @@ export default function TreinosPage() {
       </div>
     )
   }
-
-  const lastWeight = data.weightLogs.at(-1)
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -206,83 +161,6 @@ export default function TreinosPage() {
           </div>
         </div>
 
-        {/* Peso & Altura */}
-        <div className="bg-white rounded-2xl p-5 space-y-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="font-medium">Corpo</h2>
-            <button
-              onClick={() => setShowWeightModal(true)}
-              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Registrar peso
-            </button>
-          </div>
-
-          {/* Altura — vem do perfil (onboarding) */}
-          <div className="flex justify-between items-center text-sm border-b border-border pb-3">
-            <span className="text-muted-foreground">Altura</span>
-            {editingHeight ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={heightInput}
-                  onChange={e => setHeightInput(e.target.value)}
-                  placeholder={String(data.heightCm ?? '')}
-                  className="w-16 text-right border border-border rounded-lg px-2 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  autoFocus
-                />
-                <span className="text-muted-foreground">cm</span>
-                <button
-                  onClick={handleSaveHeight}
-                  disabled={savingHeight}
-                  className="text-xs font-bold text-primary hover:text-primary/80"
-                >
-                  {savingHeight ? '...' : 'Salvar'}
-                </button>
-                <button
-                  onClick={() => setEditingHeight(false)}
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Cancelar
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => { setHeightInput(String(data.heightCm ?? '')); setEditingHeight(true) }}
-                className="flex items-center gap-1 font-medium hover:text-primary transition-colors"
-              >
-                {data.heightCm ? `${data.heightCm} cm` : 'Adicionar'}
-                <Pencil className="w-3 h-3 text-muted-foreground" />
-              </button>
-            )}
-          </div>
-
-          {/* Peso — histórico de weight_logs */}
-          {data.weightLogs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum registro de peso ainda.</p>
-          ) : (
-            <div className="space-y-2">
-              {data.weightLogs.slice(-5).reverse().map((log, i) => (
-                <div key={i} className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">{log.date}</span>
-                  <span className="font-medium">{log.weight_kg} kg</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {lastWeight && (
-            <div className="border-t border-border pt-3">
-              <p className="text-xs text-muted-foreground">
-                Último registro:{' '}
-                <span className="font-medium text-foreground">{lastWeight.weight_kg} kg</span>{' '}
-                em {lastWeight.date}
-              </p>
-            </div>
-          )}
-        </div>
-
         {/* Dor */}
         <div className="bg-white rounded-2xl p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
@@ -323,39 +201,6 @@ export default function TreinosPage() {
         </button>
 
       </div>
-
-      {/* Modal peso */}
-      {showWeightModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100] flex items-end pb-16">
-          <div className="w-full max-w-md mx-auto bg-background border border-border rounded-t-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Registrar peso</h3>
-              <button onClick={() => setShowWeightModal(false)}>
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex gap-3">
-              <input
-                type="number"
-                placeholder="Ex: 72.5"
-                value={weightInput}
-                onChange={e => setWeightInput(e.target.value)}
-                className="flex-1 h-11 px-4 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-foreground"
-                autoFocus
-              />
-              <span className="flex items-center text-sm text-muted-foreground">kg</span>
-            </div>
-            <Button
-              className="w-full h-11"
-              onClick={handleAddWeight}
-              disabled={savingWeight || !weightInput}
-            >
-              {savingWeight ? 'Salvando...' : 'Salvar'}
-            </Button>
-          </div>
-        </div>
-      )}
-
     </div>
   )
 }

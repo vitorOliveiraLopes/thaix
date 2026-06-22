@@ -50,11 +50,11 @@ export default function OnboardingFrequencia() {
       await Promise.all([
         saveFrequencia(user.id, freq, activeDays),
         saveHorarios(user.id, horarioTreino, horarioHidratacao),
-        saveCurrentStep(user.id, 'peso'),
+        saveCurrentStep(user.id, 'protocolo'),
       ])
     }
 
-    router.push('/onboarding/peso')
+    router.push('/onboarding/protocolo')
   }
 
   return (

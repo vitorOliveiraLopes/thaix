@@ -8,11 +8,6 @@ type WorkoutDay = {
   session_id: string | null
 }
 
-type WeightLog = {
-  date: string
-  weight_kg: number
-}
-
 type PainLog = {
   date: string
   pain_score: number
@@ -25,28 +20,24 @@ type HydrationDay = {
 
 export type ProgressData = {
   workoutDays: WorkoutDay[]
-  weightLogs: WeightLog[]
   painLogs: PainLog[]
   hydrationDays: HydrationDay[]
   totalWorkouts: number
   currentStreak: number
   maxStreak: number
   totalMinutes: number
-  heightCm: number | null
   loading: boolean
 }
 
 export function useProgressData() {
   const [data, setData] = useState<ProgressData>({
     workoutDays: [],
-    weightLogs: [],
     painLogs: [],
     hydrationDays: [],
     totalWorkouts: 0,
     currentStreak: 0,
     maxStreak: 0,
     totalMinutes: 0,
-    heightCm: null,
     loading: true,
   })
 
@@ -56,17 +47,12 @@ export function useProgressData() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-        const [workoutsRes, weightRes, painRes, hydrationRes, profileRes] = await Promise.all([
+      const [workoutsRes, painRes, hydrationRes] = await Promise.all([
         supabase
           .from('workouts_completed')
           .select('completed_at, session_id')
           .eq('user_id', user.id)
           .order('completed_at', { ascending: false }),
-        supabase
-          .from('weight_logs')
-          .select('date, weight_kg')
-          .eq('user_id', user.id)
-          .order('date', { ascending: true }),
         supabase
           .from('daily_pain_logs')
           .select('date, pain_score')
@@ -77,11 +63,6 @@ export function useProgressData() {
           .select('date, met_goal')
           .eq('user_id', user.id)
           .order('date', { ascending: false }),
-        supabase
-          .from('profiles')
-          .select('height_cm')
-          .eq('user_id', user.id)
-          .single(),
       ])
 
       const workouts = workoutsRes.data ?? []
@@ -97,14 +78,12 @@ export function useProgressData() {
 
       setData({
         workoutDays,
-        weightLogs: (weightRes.data ?? []) as WeightLog[],
         painLogs: (painRes.data ?? []) as PainLog[],
         hydrationDays: (hydrationRes.data ?? []) as HydrationDay[],
         totalWorkouts: workouts.length,
         currentStreak,
         maxStreak,
         totalMinutes,
-        heightCm: profileRes.data?.height_cm ?? null,
         loading: false,
       })
     }

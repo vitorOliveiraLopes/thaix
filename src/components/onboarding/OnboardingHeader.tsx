@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 
-// 8 steps — horario e notificacoes removidos (incorporados em frequencia)
 const STEPS = [
   '/onboarding/apresentacao',
   '/onboarding/motivacao',
@@ -14,7 +13,6 @@ const STEPS = [
   '/onboarding/trava',
   '/onboarding/teste-fisico',
   '/onboarding/frequencia',
-  '/onboarding/peso',
   '/onboarding/protocolo',
 ]
 
