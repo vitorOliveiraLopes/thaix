@@ -44,7 +44,7 @@ type AdminClient = any
 // ─── Lógica de negócio ───────────────────────────────────────────────────────
 
 async function saveResults(
-  admin: ReturnType<typeof import('@/lib/supabase/server').createClient extends Promise<infer T> ? () => T : never>,
+  admin: any,
   workoutId: string,
   results: WorkoutResult[]
 ): Promise<void> {
@@ -65,7 +65,7 @@ async function saveResults(
 }
 
 async function markWorkoutComplete(
-  admin: ReturnType<typeof import('@/lib/supabase/server').createClient extends Promise<infer T> ? () => T : never>,
+  admin: any,
   workoutId: string,
   userId: string
 ): Promise<{ skill_id: string; week_number: number }> {
@@ -82,7 +82,7 @@ async function markWorkoutComplete(
 }
 
 async function checkLevelProgression(
-  admin: ReturnType<typeof import('@/lib/supabase/server').createClient extends Promise<infer T> ? () => T : never>,
+  admin: any,
   userId: string,
   skillId: string,
   currentLevel: string,
@@ -153,7 +153,7 @@ async function checkLevelProgression(
 }
 
 async function incrementSessionCount(
-  admin: ReturnType<typeof import('@/lib/supabase/server').createClient extends Promise<infer T> ? () => T : never>, userId: string, skillId: string
+  admin: any, userId: string, skillId: string
 ): Promise<void> {
   const { data: current } = await admin
     .from('user_skill_progress')
@@ -167,7 +167,7 @@ async function incrementSessionCount(
 }
 
 async function checkAndInsertAutoPRs(
-  admin: ReturnType<typeof import('@/lib/supabase/server').createClient extends Promise<infer T> ? () => T : never>, userId: string, results: WorkoutResult[]
+  admin: any, userId: string, results: WorkoutResult[]
 ): Promise<void> {
   const exerciseIds = results.map(r => r.skill_exercise_id)
   const { data: existingPRs } = await admin
@@ -201,7 +201,7 @@ async function checkAndInsertAutoPRs(
 }
 
 async function evaluateAchievements(
-  admin: ReturnType<typeof import('@/lib/supabase/server').createClient extends Promise<infer T> ? () => T : never>, userId: string, workoutId: string, skillId: string
+  admin: any, userId: string, workoutId: string, skillId: string
 ): Promise<string[]> {
   const [allRes, unlockedRes, totalRes, levelRes] = await Promise.all([
     admin.from('achievements').select('id, type, threshold, skill_exercise_id, skill_id, target_level'),
