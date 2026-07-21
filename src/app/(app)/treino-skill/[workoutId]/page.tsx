@@ -218,6 +218,7 @@ export default function SkillWorkoutPage() {
         skill_id: data.skill_id,
         date: data.date,
         week_number: data.week_number,
+        completed_at: data.completed_at ?? null,
         items: (data.daily_workout_items as any[])
           .sort((a, b) => a.order_index - b.order_index)
           .map(item => ({
