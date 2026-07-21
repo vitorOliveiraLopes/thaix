@@ -101,7 +101,7 @@ async function checkLevelProgression(
 
   if (!lastWorkouts || lastWorkouts.length < 2) return
 
-  const workoutIds = lastWorkouts.map(w => w.id)
+  const workoutIds = (lastWorkouts as any[]).map((w: any) => w.id)
   const [resultsRes, itemsRes] = await Promise.all([
     admin
       .from('daily_workout_results')
@@ -118,11 +118,11 @@ async function checkLevelProgression(
   if (results.length === 0) return
 
   const metGoal = workoutIds.every(wid => {
-    const sResults = results.filter(r => r.daily_workout_id === wid)
-    const sItems   = items.filter(i => i.daily_workout_id === wid)
+    const sResults = (results as any[]).filter((r: any) => r.daily_workout_id === wid)
+    const sItems   = (items as any[]).filter((i: any) => i.daily_workout_id === wid)
     if (!sResults.length || !sItems.length) return false
-    return sResults.every(r => {
-      const item = sItems.find(i => i.skill_exercise_id === r.skill_exercise_id)
+    return sResults.every((r: any) => {
+      const item = sItems.find((i: any) => i.skill_exercise_id === r.skill_exercise_id)
       if (!item) return false
       if (item.reps)     return (r.reps_achieved     ?? 0) >= item.reps
       if (item.time_sec) return (r.time_achieved_sec ?? 0) >= item.time_sec
@@ -169,7 +169,7 @@ async function incrementSessionCount(
 async function checkAndInsertAutoPRs(
   admin: any, userId: string, results: WorkoutResult[]
 ): Promise<void> {
-  const exerciseIds = results.map(r => r.skill_exercise_id)
+  const exerciseIds = results.map((r: WorkoutResult) => r.skill_exercise_id)
   const { data: existingPRs } = await admin
     .from('pr_entries').select('exercise_id, value, unit')
     .eq('user_id', userId).in('exercise_id', exerciseIds)
