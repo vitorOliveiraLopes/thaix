@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Flame, Droplets, X, Pencil } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { PegaLeveModal } from '@/components/app/PegaLeveModal'
+import { SkillWorkouts } from '@/components/app/SkillWorkouts'
 
 function getGreeting(name: string | null): string {
   const hour = new Date().getHours()
@@ -42,9 +43,6 @@ export default function HomePage() {
   const router = useRouter()
   const {
     profile,
-    progress,
-    todaySession,
-    sessionItems,
     hydrationToday,
     streakCount,
     loading,
@@ -61,7 +59,6 @@ export default function HomePage() {
   const [showHydrationModal, setShowHydrationModal] = useState(false)
   const [savingGoal, setSavingGoal] = useState(false)
 
-  // Carregar dor do dia
   useEffect(() => {
     async function load() {
       const supabase = createClient()
@@ -79,7 +76,6 @@ export default function HomePage() {
     load()
   }, [])
 
-  // Carregar meta de hidratação do perfil
   useEffect(() => {
     async function load() {
       const supabase = createClient()
@@ -123,10 +119,6 @@ export default function HomePage() {
   }
 
   const coachPhrase = COACH_PHRASES[new Date().getDay() % COACH_PHRASES.length]
-  const phaseNumber = progress?.current_phase_id?.split('-').pop() ?? '1'
-  const completedInPhase = progress?.completed_session_ids?.filter(
-    id => id.startsWith(`${progress.active_protocol_id}-${phaseNumber}`)
-  ).length ?? 0
 
   if (loading) {
     return (
@@ -176,38 +168,35 @@ export default function HomePage() {
           </div>
 
           {/* Hidratação */}
-          <div onClick={handleToggleHydration} className={cn(
-            'rounded-2xl p-4 flex flex-col gap-2 shadow-sm',
+          <div className={cn(
+            'rounded-2xl p-4 flex flex-col gap-2 shadow-sm relative',
             hydrationValue ? 'bg-primary/10' : 'bg-white'
           )}>
-            <div className="flex items-center justify-between">
-              <button
-                // onClick={handleToggleHydration}
-                className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-sm"
-              >
+            {/* Botão de editar meta — canto superior direito */}
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowHydrationModal(true) }}
+              className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-black/5 transition-colors"
+            >
+              <Pencil className="w-3 h-3 text-muted-foreground" />
+            </button>
+            {/* Card inteiro marca/desmarca a meta */}
+            <button
+              onClick={handleToggleHydration}
+              className="flex flex-col gap-2 text-left w-full"
+            >
+              <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-sm">
                 <Droplets className={cn('w-4 h-4', hydrationValue ? 'text-primary' : 'text-muted-foreground')} />
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowHydrationModal(true) }}
-                className="w-8 h-8 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors" />
-              </button>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">
-                {hydrationValue ? 'Meta ✓' : 'Água'}
-              </p>
-              {/* <button
-                onClick={() => setShowHydrationModal(true)}
-                className="text-sm font-bold text-foreground hover:text-primary transition-colors"
-              >
-                {formatMl(hydrationGoal)}
-              </button> */}
-              <p>{formatMl(hydrationGoal)}</p>
-            </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  {hydrationValue ? 'Meta ✓' : 'Água'}
+                </p>
+                <p className="text-sm font-bold">{formatMl(hydrationGoal)}</p>
+              </div>
+            </button>
           </div>
 
-          {/* Dor */}
+          {/* Esforço */}
           <button
             onClick={() => setShowPegaLeve(true)}
             className="bg-white rounded-2xl p-4 flex flex-col gap-2 text-left hover:bg-muted/50 transition-colors shadow-sm"
@@ -218,7 +207,7 @@ export default function HomePage() {
               </span>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Dor</p>
+              <p className="text-xs text-muted-foreground">Esforço</p>
               <p className="text-sm font-bold">
                 {painToday !== null ? `${painToday}/10` : 'Registrar'}
               </p>
@@ -227,74 +216,8 @@ export default function HomePage() {
 
         </div>
 
-        {/* Progresso da fase */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="font-medium capitalize">
-              {progress?.active_protocol_id} — Fase {phaseNumber}
-            </span>
-            <span className="text-muted-foreground">
-              {completedInPhase} de 7 sessões
-            </span>
-          </div>
-          <div className="h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all"
-              style={{ width: `${(completedInPhase / 7) * 100}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Treino do dia */}
-        {todaySession ? (
-          <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
-            <div className="bg-muted px-5 py-4">
-              <p className="text-xs text-muted-foreground uppercase tracking-widest">
-                Treino do dia
-              </p>
-              <h2 className="text-lg font-extrabold">{todaySession.title}</h2>
-              <p className="text-sm text-muted-foreground">
-                ~{todaySession.estimated_minutes} min · {sessionItems.length} exercícios
-              </p>
-            </div>
-
-            <div className="divide-y divide-border">
-              {sessionItems.slice(0, 4).map((item) => (
-                <div key={item.id} className="px-5 py-3 flex justify-between items-center">
-                  <span className="text-sm font-medium">{item.exercise?.name}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {item.sets}×{item.reps != null
-                      ? `${item.reps} reps`
-                      : `${item.time_sec}s`}
-                  </span>
-                </div>
-              ))}
-              {sessionItems.length > 4 && (
-                <div className="px-5 py-3">
-                  <span className="text-sm text-muted-foreground">
-                    +{sessionItems.length - 4} exercícios
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="px-5 py-4">
-              <Button
-                className="w-full h-11 rounded-full"
-                onClick={() => router.push(`/treinos/${todaySession.id}`)}
-              >
-                Iniciar treino
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl p-6 text-center space-y-2 shadow-sm">
-            <p className="font-medium">Nenhum treino para hoje</p>
-            <p className="text-sm text-muted-foreground">
-              Você completou todas as sessões desta fase!
-            </p>
-          </div>
-        )}
+        {/* Treinos do dia por skill */}
+        <SkillWorkouts />
 
       </div>
 
@@ -313,7 +236,6 @@ export default function HomePage() {
       {showHydrationModal && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100] flex items-end pb-16">
           <div className="w-full max-w-md mx-auto bg-background border border-border rounded-t-2xl p-6 space-y-5">
-
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-lg">Meta de hidratação</h3>
@@ -323,7 +245,6 @@ export default function HomePage() {
                 <X className="w-5 h-5 text-muted-foreground" />
               </button>
             </div>
-
             <div className="grid grid-cols-3 gap-3">
               {HYDRATION_OPTIONS.map(ml => (
                 <button
@@ -338,13 +259,10 @@ export default function HomePage() {
                   )}
                 >
                   <span className="block text-lg font-extrabold">{formatMl(ml)}</span>
-                  <span className="text-xs opacity-70">
-                    {ml < 1000 ? `${ml}ml` : `${ml}ml`}
-                  </span>
+                  <span className="text-xs opacity-70">{ml}ml</span>
                 </button>
               ))}
             </div>
-
             <p className="text-xs text-muted-foreground text-center">
               Recomendação: entre 2L e 3L por dia para atletas.
             </p>

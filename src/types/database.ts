@@ -1,96 +1,56 @@
-export type Protocol = {
-  id: string
-  name: string
-  description: string
-  order_index: number
-  available: boolean
-}
+// ─── ThaixSkill — Tipos do banco de dados ────────────────────────────────────
+// Alinhados com o schema real do Supabase (verificado em julho 2026)
 
-export type Phase = {
-  id: string
-  protocol_id: string
-  phase_number: number
-  name: string
-  subtitle: string | null
-  description: string | null
-  requires_test: boolean
-}
-
-export type Exercise = {
-  id: string
-  name: string
-  category: 'Aquecimento' | 'Força' | 'Skill' | 'Core' | 'Mobilidade'
-  demo_video_url: string | null
-  loop_video_url: string | null
-  image_url: string | null
-}
-
-export type Session = {
-  id: string
-  phase_id: string
-  day_number: number
-  title: string
-  estimated_minutes: number
-  image_url: string | null
-}
-
-export type SessionItem = {
-  id: string
-  session_id: string
-  exercise_id: string
-  order_index: number
-  sets: number
-  reps: number | null
-  time_sec: number | null
-  note: string | null
-  exercise?: Exercise
-}
-
-export type UserProgress = {
+export type Profile = {
   id: string
   user_id: string
-  active_protocol_id: string
-  current_phase_id: string
-  current_day_number: number
-  completed_session_ids: string[]
-  last_session_completed_at: string | null
+  name: string | null           // coluna real: 'name' (não 'full_name')
+  email: string | null
+  avatar_url: string | null
+  weight_kg: number | null
+  height_cm: number | null
+  hydration_goal_ml: number | null
+  workout_reminder_time: string | null
+  hydration_reminder_time: string | null
+  created_at: string
+  updated_at: string
 }
 
 export type UserSettings = {
   id: string
   user_id: string
+  // Fonte de verdade para horários e toggles de notificação
   notifications: {
-    workout: { time: string; enabled: boolean }
+    workout:   { time: string; enabled: boolean }
     hydration: { time: string; enabled: boolean }
   }
   preferences: {
-    theme: 'light' | 'dark' | 'system'
-    weightUnit: 'kg' | 'lb'
-    captions: boolean
-    fontSize: 'default' | 'large' | 'xlarge'
+    theme:       'light' | 'dark' | 'system'
+    weightUnit:  'kg' | 'lb'
+    captions:    boolean
+    fontSize:    'default' | 'large' | 'xlarge'
   }
-  subscription_status: 'trial' | 'active' | 'cancelled' | 'none'
-  subscription_plan: string
-  trial_ends_at: string | null
+  subscription_status:  'trial' | 'active' | 'cancelled' | 'none'
+  subscription_plan:    string | null
+  trial_ends_at:        string | null
+  renewal_date:         string | null
+  created_at:           string
+  updated_at:           string
 }
 
-export type Profile = {
-  id: string
-  user_id: string
-  name: string | null
-  email: string | null
-  avatar_url: string | null
-  weight_kg: number | null
-  height_cm: number | null
-}
-
+// achievement.type possíveis:
+//   'session_count' — desbloqueado ao atingir N treinos concluídos
+//   'skill_exercise' — desbloqueado ao executar um exercício pela primeira vez
+//   'skill_level'   — desbloqueado ao avançar de nível numa skill
 export type Achievement = {
   id: string
-  type: 'session_count' | 'exercise'
+  type: 'session_count' | 'skill_exercise' | 'skill_level'
   name: string
   description: string | null
   threshold: number | null
-  exercise_id: string | null
+  skill_exercise_id: string | null
+  skill_id: string | null
+  target_level: string | null
   display_type: string
 }
 
@@ -101,4 +61,5 @@ export type OnboardingData = {
   pullups: number
   squats: number
   recommendedProtocol: string | null
+  dias_semana: number[]
 }

@@ -9,37 +9,53 @@ import { saveFrequencia, saveCurrentStep, saveHorarios } from '@/lib/onboarding-
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
-const DAYS_OPTIONS = [3, 4, 5]
-const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-const DEFAULT_DAYS: Record<number, number[]> = {
-  3: [1, 3, 5],
-  4: [1, 2, 4, 6],
-  5: [1, 2, 3, 4, 6],
-}
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const WEEKDAYS = [
+  { label: 'Dom', index: 0 },
+  { label: 'Seg', index: 1 },
+  { label: 'Ter', index: 2 },
+  { label: 'Qua', index: 3 },
+  { label: 'Qui', index: 4 },
+  { label: 'Sex', index: 5 },
+  { label: 'Sáb', index: 6 },
+]
+
+// Sugestões de preset para facilitar a seleção inicial
+const PRESETS = [
+  { label: '3×/semana',  days: [1, 3, 5] },
+  { label: '4×/semana',  days: [1, 2, 4, 6] },
+  { label: '5×/semana',  days: [1, 2, 3, 4, 6] },
+]
+
+const MIN_DAYS = 2
+const MAX_DAYS = 6
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function OnboardingFrequencia() {
   const router = useRouter()
-  const [freq, setFreq] = useState(4)
-  const [activeDays, setActiveDays] = useState<number[]>(DEFAULT_DAYS[4])
+  const [activeDays, setActiveDays] = useState<number[]>(PRESETS[1].days) // 4×/semana default
   const [horarioTreino, setHorarioTreino] = useState('07:30')
   const [horarioHidratacao, setHorarioHidratacao] = useState('14:00')
   const [saving, setSaving] = useState(false)
 
-  function handleFreqChange(n: number) {
-    setFreq(n)
-    setActiveDays(DEFAULT_DAYS[n])
+  function toggleDay(index: number) {
+    setActiveDays(prev => {
+      const isActive = prev.includes(index)
+      // Não deixa remover se já está no mínimo
+      if (isActive && prev.length <= MIN_DAYS) return prev
+      return isActive ? prev.filter(d => d !== index) : [...prev, index]
+    })
   }
 
-  function toggleDay(i: number) {
-    setActiveDays(prev =>
-      prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i]
-    )
+  function applyPreset(days: number[]) {
+    setActiveDays(days)
   }
 
   async function handleNext() {
     setSaving(true)
 
-    // Pede permissão de notificação nativamente (browser/PWA)
     if ('Notification' in window && Notification.permission === 'default') {
       await Notification.requestPermission()
     }
@@ -48,7 +64,7 @@ export default function OnboardingFrequencia() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       await Promise.all([
-        saveFrequencia(user.id, freq, activeDays),
+        saveFrequencia(user.id, activeDays.length, activeDays),
         saveHorarios(user.id, horarioTreino, horarioHidratacao),
         saveCurrentStep(user.id, 'protocolo'),
       ])
@@ -57,62 +73,91 @@ export default function OnboardingFrequencia() {
     router.push('/onboarding/protocolo')
   }
 
+  const sortedDays = [...activeDays].sort((a, b) => a - b)
+  const daysLabel = sortedDays.map(d => WEEKDAYS[d].label).join(', ')
+  const canContinue = activeDays.length >= MIN_DAYS && !saving
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
     <div className="flex flex-col min-h-screen max-w-sm mx-auto w-full">
       <OnboardingHeader backHref="/onboarding/teste-fisico" />
 
       <div className="flex-1 flex flex-col px-5 py-4 gap-4">
         <CoachBubble
-          title="Quando e quantas vezes você treina?"
-          subtitle="Vamos montar sua agenda de skills e te lembrar nos horários certos."
+          title="Quais dias você quer treinar?"
+          subtitle="Escolha seus dias de skill. Você pode ajustar depois a qualquer momento."
         />
 
-        {/* Frequência */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase mb-3">
-            SESSÕES POR SEMANA
-          </p>
-          <div className="flex gap-3 mb-4">
-            {DAYS_OPTIONS.map(n => (
-              <button
-                key={n}
-                onClick={() => handleFreqChange(n)}
-                className={cn(
-                  "flex-1 py-4 rounded-2xl border text-center transition-all",
-                  freq === n
-                    ? "bg-primary border-primary text-white"
-                    : "bg-background border-border hover:border-primary/40"
-                )}
-              >
-                <span className="block text-2xl font-extrabold">{n}</span>
-                <span className="text-xs font-medium opacity-80">dias</span>
-              </button>
-            ))}
+        {/* Seletor de dias */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm space-y-4">
+
+          {/* Grade de dias */}
+          <div>
+            <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase mb-3">
+              SEUS DIAS DE SKILL
+            </p>
+            <div className="flex gap-1.5 justify-between">
+              {WEEKDAYS.map(({ label, index }) => {
+                const isActive = activeDays.includes(index)
+                return (
+                  <button
+                    key={index}
+                    onClick={() => toggleDay(index)}
+                    className={cn(
+                      'flex-1 py-3 rounded-xl text-xs font-bold transition-all',
+                      isActive
+                        ? 'bg-primary text-white shadow-sm'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                    )}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
-          {/* Dias da semana */}
-          <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase mb-2">
-            SEUS DIAS DE SKILL
-          </p>
-          <div className="flex gap-1.5 justify-between">
-            {WEEKDAYS.map((day, i) => (
-              <button
-                key={i}
-                onClick={() => toggleDay(i)}
-                className={cn(
-                  "flex-1 py-2 rounded-xl text-xs font-bold transition-all",
-                  activeDays.includes(i)
-                    ? "bg-primary text-white"
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                {day}
-              </button>
-            ))}
+          {/* Presets */}
+          <div>
+            <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase mb-2">
+              SUGESTÕES RÁPIDAS
+            </p>
+            <div className="flex gap-2">
+              {PRESETS.map(preset => {
+                const isSelected =
+                  preset.days.length === activeDays.length &&
+                  preset.days.every(d => activeDays.includes(d))
+                return (
+                  <button
+                    key={preset.label}
+                    onClick={() => applyPreset(preset.days)}
+                    className={cn(
+                      'flex-1 py-2 rounded-xl border text-xs font-bold transition-all',
+                      isSelected
+                        ? 'bg-primary/10 border-primary text-primary'
+                        : 'border-border text-muted-foreground hover:border-primary/40'
+                    )}
+                  >
+                    {preset.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Toque para ajustar.
-          </p>
+
+          {/* Resumo */}
+          <div className="bg-muted rounded-xl px-3 py-2.5">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-bold text-foreground">{activeDays.length}×/semana:</span>{' '}
+              {daysLabel}
+            </p>
+            {activeDays.length < MIN_DAYS && (
+              <p className="text-xs text-destructive mt-1">
+                Selecione ao menos {MIN_DAYS} dias
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Horários */}
@@ -121,7 +166,6 @@ export default function OnboardingFrequencia() {
             LEMBRETES DIÁRIOS
           </p>
 
-          {/* Treino */}
           <label className="flex items-center justify-between px-4 py-3 border-b border-border cursor-pointer">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -135,12 +179,11 @@ export default function OnboardingFrequencia() {
             <input
               type="time"
               value={horarioTreino}
-              onChange={(e) => setHorarioTreino(e.target.value)}
+              onChange={e => setHorarioTreino(e.target.value)}
               className="text-xl font-extrabold text-primary bg-transparent border-none outline-none cursor-pointer text-right"
             />
           </label>
 
-          {/* Hidratação */}
           <label className="flex items-center justify-between px-4 py-3 cursor-pointer">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
@@ -154,7 +197,7 @@ export default function OnboardingFrequencia() {
             <input
               type="time"
               value={horarioHidratacao}
-              onChange={(e) => setHorarioHidratacao(e.target.value)}
+              onChange={e => setHorarioHidratacao(e.target.value)}
               className="text-xl font-extrabold text-primary bg-transparent border-none outline-none cursor-pointer text-right"
             />
           </label>
@@ -173,7 +216,7 @@ export default function OnboardingFrequencia() {
       <div className="px-5 pb-8">
         <button
           onClick={handleNext}
-          disabled={saving}
+          disabled={!canContinue}
           className="w-full h-14 bg-primary text-white font-bold text-base rounded-full hover:bg-primary/90 transition-colors disabled:opacity-40"
         >
           {saving ? 'Salvando...' : 'Continuar'}

@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 type WorkoutDay = {
   date: string
-  session_id: string | null
 }
 
 type PainLog = {
@@ -29,7 +30,9 @@ export type ProgressData = {
   loading: boolean
 }
 
-export function useProgressData() {
+// ─── Hook ────────────────────────────────────────────────────────────────────
+
+export function useProgressData(): ProgressData {
   const [data, setData] = useState<ProgressData>({
     workoutDays: [],
     painLogs: [],
@@ -48,11 +51,13 @@ export function useProgressData() {
       if (!user) return
 
       const [workoutsRes, painRes, hydrationRes] = await Promise.all([
+        // Fonte de verdade: daily_workouts com completed_at preenchido
         supabase
-          .from('workouts_completed')
-          .select('completed_at, session_id')
+          .from('daily_workouts')
+          .select('date, skill_id')
           .eq('user_id', user.id)
-          .order('completed_at', { ascending: false }),
+          .not('completed_at', 'is', null)
+          .order('date', { ascending: false }),
         supabase
           .from('daily_pain_logs')
           .select('date, pain_score')
@@ -66,43 +71,41 @@ export function useProgressData() {
       ])
 
       const workouts = workoutsRes.data ?? []
-      const workoutDays: WorkoutDay[] = workouts.map(w => ({
-        date: w.completed_at.split('T')[0],
-        session_id: w.session_id,
-      }))
-
-      const uniqueDays = [...new Set(workoutDays.map(w => w.date))].sort().reverse()
-      const currentStreak = calculateStreak(uniqueDays)
-      const maxStreak = calculateMaxStreak(uniqueDays)
-      const totalMinutes = workouts.length * 25
+      // Dias únicos de treino (um dia pode ter 2 skills)
+      const uniqueDays = [...new Set(workouts.map(w => w.date))].sort().reverse()
 
       setData({
-        workoutDays,
+        workoutDays: uniqueDays.map(date => ({ date })),
         painLogs: (painRes.data ?? []) as PainLog[],
         hydrationDays: (hydrationRes.data ?? []) as HydrationDay[],
         totalWorkouts: workouts.length,
-        currentStreak,
-        maxStreak,
-        totalMinutes,
+        currentStreak: calculateStreak(uniqueDays),
+        maxStreak: calculateMaxStreak(uniqueDays),
+        // Estimativa de 25 min por treino de skill
+        totalMinutes: workouts.length * 25,
         loading: false,
       })
     }
+
     load()
   }, [])
 
   return data
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function calculateStreak(sortedDaysDesc: string[]): number {
   if (sortedDaysDesc.length === 0) return 0
   const today = new Date().toISOString().split('T')[0]
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().split('T')[0]
   if (sortedDaysDesc[0] !== today && sortedDaysDesc[0] !== yesterday) return 0
   let streak = 1
   for (let i = 1; i < sortedDaysDesc.length; i++) {
-    const prev = new Date(sortedDaysDesc[i - 1])
-    const curr = new Date(sortedDaysDesc[i])
-    if ((prev.getTime() - curr.getTime()) / 86400000 === 1) streak++
+    const diff =
+      (new Date(sortedDaysDesc[i - 1]).getTime() - new Date(sortedDaysDesc[i]).getTime()) /
+      86_400_000
+    if (diff === 1) streak++
     else break
   }
   return streak
@@ -110,15 +113,14 @@ function calculateStreak(sortedDaysDesc: string[]): number {
 
 function calculateMaxStreak(sortedDaysDesc: string[]): number {
   if (sortedDaysDesc.length === 0) return 0
+  const days = [...sortedDaysDesc].reverse()
   let max = 1
   let current = 1
-  const days = [...sortedDaysDesc].reverse()
   for (let i = 1; i < days.length; i++) {
-    const prev = new Date(days[i - 1])
-    const curr = new Date(days[i])
-    if ((curr.getTime() - prev.getTime()) / 86400000 === 1) {
-      current++
-      max = Math.max(max, current)
+    const diff =
+      (new Date(days[i]).getTime() - new Date(days[i - 1]).getTime()) / 86_400_000
+    if (diff === 1) {
+      max = Math.max(max, ++current)
     } else {
       current = 1
     }

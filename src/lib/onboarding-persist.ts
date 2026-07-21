@@ -130,3 +130,51 @@ export async function saveCurrentStep(userId: string, step: string) {
     .from('onboarding_responses')
     .upsert({ user_id: userId, current_step: step }, { onConflict: 'user_id' })
 }
+
+// IDs válidos na tabela skills — usados como FK em user_skill_progress
+const VALID_SKILL_IDS = new Set(['pull-up', 'c2b', 'bmu', 't2b', 'hspu'])
+
+export async function initializeSkillProgress(userId: string) {
+  const supabase = createClient()
+
+  // Busca skills escolhidas e resultado do teste físico
+  const { data } = await supabase
+    .from('onboarding_responses')
+    .select('skills, pushups, pullups, squats')
+    .eq('user_id', userId)
+    .single()
+
+  if (!data?.skills || !Array.isArray(data.skills) || data.skills.length === 0) return
+
+  // Filtrar apenas IDs válidos para evitar FK violation
+  // (defesa contra dados legados ou inconsistências no onboarding)
+  const validSkills = data.skills.filter((id: string) => VALID_SKILL_IDS.has(id))
+  if (validSkills.length === 0) {
+    console.error('[initializeSkillProgress] Nenhuma skill válida encontrada:', data.skills)
+    return
+  }
+
+  // Determina nível inicial baseado no teste físico
+  const pushups = data.pushups ?? 0
+  const pullups = data.pullups ?? 0
+
+  let initialLevel = 'iniciante'
+  if (pushups >= 15 && pullups >= 3) initialLevel = 'intermediario'
+  if (pushups >= 20 && pullups >= 5) initialLevel = 'avancado'
+
+  // Upsert de user_skill_progress para cada skill válida
+  const inserts = validSkills.map((skillId: string) => ({
+    user_id:                   userId,
+    skill_id:                  skillId,
+    level:                     initialLevel,
+    week_number:               1,
+    sessions_at_current_level: 0,
+    updated_at:                new Date().toISOString(),
+  }))
+
+  const { error } = await supabase
+    .from('user_skill_progress')
+    .upsert(inserts, { onConflict: 'user_id,skill_id', ignoreDuplicates: false })
+
+  if (error) console.error('[initializeSkillProgress]', error)
+}

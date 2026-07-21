@@ -11,18 +11,18 @@ type Props = {
   onSaved: (score: number) => void
 }
 
-const PAIN_LABELS: Record<number, { label: string; emoji: string; color: string }> = {
-  0:  { label: 'Sem dor',        emoji: '😄', color: 'text-green-500' },
-  1:  { label: 'Quase nada',     emoji: '🙂', color: 'text-green-400' },
-  2:  { label: 'Muito leve',     emoji: '😊', color: 'text-lime-500' },
-  3:  { label: 'Leve',           emoji: '😐', color: 'text-yellow-400' },
-  4:  { label: 'Moderada',       emoji: '😕', color: 'text-yellow-500' },
-  5:  { label: 'Média',          emoji: '😣', color: 'text-orange-400' },
-  6:  { label: 'Intensa',        emoji: '😖', color: 'text-orange-500' },
-  7:  { label: 'Forte',          emoji: '😫', color: 'text-red-400' },
-  8:  { label: 'Muito forte',    emoji: '😤', color: 'text-red-500' },
-  9:  { label: 'Severa',         emoji: '🤯', color: 'text-red-600' },
-  10: { label: 'Insuportável',   emoji: '💀', color: 'text-red-700' },
+const EFFORT_LABELS: Record<number, { label: string; emoji: string; color: string }> = {
+  0:  { label: 'Sem esforço',     emoji: '😄', color: 'text-green-500' },
+  1:  { label: 'Quase nada',      emoji: '🙂', color: 'text-green-400' },
+  2:  { label: 'Muito leve',      emoji: '😊', color: 'text-lime-500' },
+  3:  { label: 'Leve',            emoji: '😐', color: 'text-yellow-400' },
+  4:  { label: 'Moderado',        emoji: '😕', color: 'text-yellow-500' },
+  5:  { label: 'Médio',           emoji: '😣', color: 'text-orange-400' },
+  6:  { label: 'Intenso',         emoji: '😖', color: 'text-orange-500' },
+  7:  { label: 'Forte',           emoji: '😫', color: 'text-red-400' },
+  8:  { label: 'Muito forte',     emoji: '😤', color: 'text-red-500' },
+  9:  { label: 'Severo',          emoji: '🤯', color: 'text-red-600' },
+  10: { label: 'Máximo esforço',  emoji: '💀', color: 'text-red-700' },
 }
 
 export function PegaLeveModal({ onClose, onSaved }: Props) {
@@ -50,7 +50,7 @@ export function PegaLeveModal({ onClose, onSaved }: Props) {
     setSaving(false)
   }
 
-  const info = PAIN_LABELS[score]
+  const info = EFFORT_LABELS[score]
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100] flex items-end">
@@ -61,7 +61,7 @@ export function PegaLeveModal({ onClose, onSaved }: Props) {
           <div>
             <h3 className="font-semibold">PegaLeve 💪</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Como está seu nível de dor hoje?
+              Como foi seu esforço hoje?
             </p>
           </div>
           <button
@@ -92,8 +92,8 @@ export function PegaLeveModal({ onClose, onSaved }: Props) {
             className="w-full accent-foreground"
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>0 — Sem dor</span>
-            <span>10 — Insuportável</span>
+            <span>0 — Sem esforço</span>
+            <span>10 — Máximo</span>
           </div>
         </div>
 
@@ -120,7 +120,7 @@ export function PegaLeveModal({ onClose, onSaved }: Props) {
           onClick={handleSave}
           disabled={saving}
         >
-          {saving ? 'Salvando...' : 'Registrar dor do dia'}
+          {saving ? 'Salvando...' : 'Registrar esforço do dia'}
         </Button>
 
       </div>

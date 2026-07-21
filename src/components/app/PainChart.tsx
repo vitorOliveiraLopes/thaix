@@ -41,7 +41,7 @@ export function PainChart({ logs }: Props) {
     return (
       <div className="h-40 flex items-center justify-center">
         <p className="text-sm text-muted-foreground">
-          Nenhum registro de dor ainda.
+          Nenhum registro de esforço ainda.
         </p>
       </div>
     )
@@ -53,7 +53,7 @@ export function PainChart({ logs }: Props) {
 
   const data = last30.map(l => ({
     date: formatDate(l.date),
-    dor: l.pain_score,
+    esforco: l.pain_score,
   }))
 
   return (
@@ -65,7 +65,7 @@ export function PainChart({ logs }: Props) {
           </span>
         </span>
         <span className={trend.improving ? 'text-green-600' : 'text-orange-500'}>
-          {trend.improving ? '↓ Melhorando' : trend.slope > 0 ? '↑ Atenção' : '→ Estável'}
+          {trend.improving ? '↓ Esforço caindo' : trend.slope > 0 ? '↑ Atenção' : '→ Estável'}
         </span>
       </div>
 
@@ -93,7 +93,7 @@ export function PainChart({ logs }: Props) {
                 border: '1px solid var(--border)',
                 background: 'var(--background)',
             }}
-            formatter={(value: unknown) => [`${value}/10`, 'Dor']}
+            formatter={(value: unknown) => [`${value}/10`, 'Esforço']}
           />
           <ReferenceLine
             y={avg}
@@ -103,7 +103,7 @@ export function PainChart({ logs }: Props) {
           />
           <Line
             type="monotone"
-            dataKey="dor"
+            dataKey="esforco"
             stroke="var(--foreground)"
             strokeWidth={2}
             dot={{ r: 3, fill: 'var(--foreground)' }}

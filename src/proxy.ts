@@ -1,23 +1,45 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// ─── Onboarding step → route map ─────────────────────────────────────────────
+
 const STEP_ROUTES: Record<string, string> = {
-  'apresentacao':   '/onboarding/apresentacao',
-  'motivacao':      '/onboarding/motivacao',
-  'como-conheceu':  '/onboarding/como-conheceu',
-  'skills':         '/onboarding/skills',
-  'trava':          '/onboarding/trava',
-  'teste-fisico':   '/onboarding/teste-fisico',
-  'frequencia':     '/onboarding/frequencia',
-  'peso':           '/onboarding/peso',
-  'protocolo':      '/onboarding/protocolo',
-  'completo':       '/home',
+  'apresentacao':  '/onboarding/apresentacao',
+  'motivacao':     '/onboarding/motivacao',
+  'como-conheceu': '/onboarding/como-conheceu',
+  'skills':        '/onboarding/skills',
+  'trava':         '/onboarding/trava',
+  'teste-fisico':  '/onboarding/teste-fisico',
+  'frequencia':    '/onboarding/frequencia',
+  'peso':          '/onboarding/peso',
+  'protocolo':     '/onboarding/protocolo',
+  'completo':      '/home',
 }
 
 function getOnboardingRedirect(row: Record<string, unknown> | null): string {
   if (!row?.current_step) return '/onboarding/apresentacao'
   return STEP_ROUTES[row.current_step as string] ?? '/onboarding/apresentacao'
 }
+
+// ─── Trial expiry check ───────────────────────────────────────────────────────
+//
+// Retorna true se o aluno está com trial expirado e sem assinatura ativa.
+// Alunos com status 'active' nunca são bloqueados.
+// Alunos sem user_settings (edge case de trigger falho) não são bloqueados
+// para não criar loop de redirecionamento.
+
+function isTrialExpired(settings: {
+  subscription_status: string
+  trial_ends_at: string | null
+} | null): boolean {
+  if (!settings) return false
+  if (settings.subscription_status === 'active') return false
+  if (settings.subscription_status !== 'trial') return false
+  if (!settings.trial_ends_at) return false
+  return new Date(settings.trial_ends_at).getTime() < Date.now()
+}
+
+// ─── Middleware ───────────────────────────────────────────────────────────────
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -42,15 +64,15 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const pathname = request.nextUrl.pathname
 
-  const protectedRoutes = ['/home', '/treinos', '/cursos', '/perfil', '/comunidade', '/paywall']
+  const protectedRoutes = ['/home', '/treinos', '/cursos', '/perfil', '/comunidade']
   const isProtected = protectedRoutes.some(r => pathname.startsWith(r))
 
-  // Sem sessão → login
+  // ── Sem sessão → login ────────────────────────────────────────────────────
   if (!user && (isProtected || pathname.startsWith('/onboarding'))) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Logado em login/signup → verificar onboarding e redirecionar
+  // ── Logado em login/signup → retomar onboarding ou ir para home ──────────
   if (user && ['/login', '/signup'].includes(pathname)) {
     const { data } = await supabase
       .from('onboarding_responses')
@@ -60,21 +82,43 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(getOnboardingRedirect(data), request.url))
   }
 
-  // Logado em rota protegida sem onboarding completo → retomar onboarding
-  if (user && pathname === '/home') {
-    const { data } = await supabase
-      .from('onboarding_responses')
-      .select('current_step')
-      .eq('user_id', user.id)
-      .maybeSingle()
-    const redirect = getOnboardingRedirect(data)
-    if (redirect !== '/home') {
-      return NextResponse.redirect(new URL(redirect, request.url))
+  // ── Verificações para usuários logados em rotas protegidas ────────────────
+  if (user && isProtected) {
+
+    // 1. Onboarding incompleto → retomar step
+    if (pathname === '/home') {
+      const { data } = await supabase
+        .from('onboarding_responses')
+        .select('current_step')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      const redirect = getOnboardingRedirect(data)
+      if (redirect !== '/home') {
+        return NextResponse.redirect(new URL(redirect, request.url))
+      }
+    }
+
+    // 2. Trial expirado → paywall
+    //    Só bloqueia rotas do app principal, não /perfil (para não prender o aluno)
+    //    e não /paywall (evitar loop)
+    const isAppRoute = ['/home', '/treinos', '/cursos', '/comunidade'].some(
+      r => pathname.startsWith(r)
+    )
+
+    if (isAppRoute) {
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('subscription_status, trial_ends_at')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (isTrialExpired(settings)) {
+        return NextResponse.redirect(new URL('/paywall', request.url))
+      }
     }
   }
 
-  // Só redireciona para /home se tentar acessar /onboarding/apresentacao
-  // (entrada do fluxo), não em steps intermediários
+  // ── Onboarding já completo → não deixar voltar para apresentacao ──────────
   if (user && pathname === '/onboarding/apresentacao') {
     const { data } = await supabase
       .from('onboarding_responses')
