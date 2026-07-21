@@ -70,9 +70,9 @@ export function useProgressData(): ProgressData {
           .order('date', { ascending: false }),
       ])
 
-      const workouts = workoutsRes.data ?? []
+      const workouts = (workoutsRes.data ?? []) as any[]
       // Dias únicos de treino (um dia pode ter 2 skills)
-      const uniqueDays = [...new Set(workouts.map(w => w.date))].sort().reverse()
+      const uniqueDays = [...new Set(workouts.map((w: any) => w.date))].sort().reverse()
 
       setData({
         workoutDays: uniqueDays.map(date => ({ date })),

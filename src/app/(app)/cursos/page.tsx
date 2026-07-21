@@ -56,11 +56,11 @@ export default function CursosPage() {
         ])
 
       // ── Skills com progresso ──────────────────────────────────────────────
-      const allVideos = allVideosRes.data ?? []
-      const watchedIds = new Set((watchedRes.data ?? []).map(v => v.video_id))
+      const allVideos = (allVideosRes.data ?? []) as any[]
+      const watchedIds = new Set((watchedRes.data ?? []).map((v: any) => v.video_id))
 
       const skillsWithProgress: SkillWithProgress[] = (skillsRes.data ?? []).map((s: any) => {
-        const skillVideos = allVideos.filter(v => v.skill_id === s.id)
+        const skillVideos = allVideos.filter((v: any) => v.skill_id === s.id)
         return {
           id: s.id,
           name: s.name,

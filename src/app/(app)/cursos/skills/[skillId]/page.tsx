@@ -61,7 +61,7 @@ export default function SkillPage() {
       ])
 
       const progressMap = new Map(
-        (progressRes.data ?? []).map(p => [p.video_id, p.watch_count])
+        (progressRes.data ?? []).map((p: any) => [p.video_id, p.watch_count])
       )
 
       const videosWithProgress = (videosRes.data ?? []).map((v: SkillVideo & { skill_videos?: { id: string }[] }) => ({

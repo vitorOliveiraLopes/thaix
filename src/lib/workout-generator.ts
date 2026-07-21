@@ -340,28 +340,29 @@ async function checkLevelProgression(
   if (!lastWorkouts || lastWorkouts.length < 2) return
 
   // Buscar resultados das últimas 2 sessões
-  const workoutIds = lastWorkouts.map(w => w.id)
-  const { data: results } = await supabase
+  const workoutIds = (lastWorkouts as any[]).map((w: any) => w.id)
+  const { data: resultsData } = await supabase
     .from('daily_workout_results')
     .select('reps_achieved, time_achieved_sec, perceived_effort, daily_workout_id, skill_exercise_id')
     .in('daily_workout_id', workoutIds)
     .eq('completed', true)
 
-  if (!results || results.length === 0) return
+  const results = (resultsData ?? []) as any[]
+  if (results.length === 0) return
 
   // Buscar metas dos exercícios
-  const exerciseIds = [...new Set(results.map(r => r.skill_exercise_id))]
+  const exerciseIds = [...new Set(results.map((r: any) => r.skill_exercise_id))]
   const { data: exercises } = await supabase
     .from('skill_exercises')
     .select('id, reps, time_sec')
     .in('id', exerciseIds)
 
-  const exerciseMap = new Map((exercises ?? []).map(e => [e.id, e]))
+  const exerciseMap = new Map((exercises ?? []).map((e: any) => [e.id, e]))
 
   // Verificar se bateu a meta nas 2 sessões
-  const sessionResults = workoutIds.map(wid => {
-    const sessionResults = results.filter(r => r.daily_workout_id === wid)
-    return sessionResults.every(r => {
+  const sessionResults = workoutIds.map((wid: any) => {
+    const sessionResults = results.filter((r: any) => r.daily_workout_id === wid)
+    return sessionResults.every((r: any) => {
       const exercise = exerciseMap.get(r.skill_exercise_id)
       if (!exercise) return false
       if (exercise.reps && r.reps_achieved) return r.reps_achieved >= exercise.reps
@@ -374,7 +375,7 @@ async function checkLevelProgression(
   if (!allSessionsCompleted) return
 
   // Verificar esforço percebido (máx 2 = fácil nas últimas 3 sessões)
-  const avgEffort = results.reduce((sum, r) => sum + (r.perceived_effort ?? 3), 0) / results.length
+  const avgEffort = results.reduce((sum: number, r: any) => sum + (r.perceived_effort ?? 3), 0) / results.length
   if (avgEffort > 2.5) return // ainda está custando esforço, não sobe
 
   // Avançar nível!

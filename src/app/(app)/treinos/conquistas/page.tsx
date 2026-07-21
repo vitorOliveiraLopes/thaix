@@ -60,7 +60,7 @@ export default function ConquistasPage() {
       ])
 
       const unlockedMap = new Map(
-        (unlockedRes.data ?? []).map(u => [u.achievement_id, u.unlocked_at])
+        (unlockedRes.data ?? []).map((u: any) => [u.achievement_id, u.unlocked_at])
       )
 
       const merged: Achievement[] = (achievementsRes.data ?? []).map((a: any) => ({

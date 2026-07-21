@@ -59,10 +59,10 @@ export async function evaluateAchievements(
     ])
 
   const allAchievements = (achievementsRes.data ?? []) as AchievementRow[]
-  const unlockedIds = new Set((unlockedRes.data ?? []).map(u => u.achievement_id))
+  const unlockedIds = new Set((unlockedRes.data ?? []).map((u: any) => u.achievement_id))
   const totalWorkouts = totalWorkoutsRes.count ?? 0
   const workoutExerciseIds = new Set(
-    (workoutItemsRes.data ?? []).map(i => i.skill_exercise_id)
+    (workoutItemsRes.data ?? []).map((i: any) => i.skill_exercise_id)
   )
   const latestLevelUp = levelHistoryRes.data?.[0] ?? null
 

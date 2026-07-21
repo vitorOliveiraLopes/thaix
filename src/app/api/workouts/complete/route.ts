@@ -113,8 +113,8 @@ async function checkLevelProgression(
       .in('daily_workout_id', workoutIds),
   ])
 
-  const results = resultsRes.data ?? []
-  const items   = itemsRes.data   ?? []
+  const results = (resultsRes.data ?? []) as any[]
+  const items   = (itemsRes.data   ?? []) as any[]
   if (results.length === 0) return
 
   const metGoal = workoutIds.every(wid => {
@@ -133,7 +133,7 @@ async function checkLevelProgression(
   if (!metGoal) return
 
   const avgEffort =
-    results.reduce((sum, r) => sum + (r.perceived_effort ?? 3), 0) / results.length
+    results.reduce((sum: number, r: any) => sum + (r.perceived_effort ?? 3), 0) / results.length
   if (avgEffort > 2.5) return
 
   const nextLevel = currentLevel === 'iniciante' ? 'intermediario' : 'avancado'
