@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { savePesoAltura, saveCurrentStep } from '@/lib/onboarding-persist'
+import { savePesoAltura, saveCurrentStep, getProfilePesoAltura } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -72,6 +72,18 @@ export default function OnboardingPeso() {
   const [peso, setPeso] = useState(65)
   const [altura, setAltura] = useState(165)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const data = await getProfilePesoAltura(user.id)
+      if (data?.weight_kg) setPeso(data.weight_kg)
+      if (data?.height_cm) setAltura(data.height_cm)
+    }
+    load()
+  }, [])
 
   async function handleNext() {
     setSaving(true)

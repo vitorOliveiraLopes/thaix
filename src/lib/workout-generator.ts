@@ -317,95 +317,6 @@ function adjustTime(baseSec: number, week: number): number {
   return baseSec + increment
 }
 
-// ── Verificar progressão de nível ────────────────────────────────────
-async function checkLevelProgression(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-  skillId: string,
-  currentLevel: string,
-  currentWeek: number
-): Promise<void> {
-  if (currentLevel === 'avancado') return // já no topo
-
-  // Buscar últimas 2 sessões concluídas
-  const { data: lastWorkouts } = await supabase
-    .from('daily_workouts')
-    .select('id, completed_at')
-    .eq('user_id', userId)
-    .eq('skill_id', skillId)
-    .not('completed_at', 'is', null)
-    .order('completed_at', { ascending: false })
-    .limit(2)
-
-  if (!lastWorkouts || lastWorkouts.length < 2) return
-
-  // Buscar resultados das últimas 2 sessões
-  const workoutIds = (lastWorkouts as any[]).map((w: any) => w.id)
-  const { data: resultsData } = await supabase
-    .from('daily_workout_results')
-    .select('reps_achieved, time_achieved_sec, perceived_effort, daily_workout_id, skill_exercise_id')
-    .in('daily_workout_id', workoutIds)
-    .eq('completed', true)
-
-  const results = (resultsData ?? []) as any[]
-  if (results.length === 0) return
-
-  // Buscar metas dos exercícios
-  const exerciseIds = [...new Set(results.map((r: any) => r.skill_exercise_id))]
-  const { data: exercises } = await supabase
-    .from('skill_exercises')
-    .select('id, reps, time_sec')
-    .in('id', exerciseIds)
-
-  const exerciseMap = new Map((exercises ?? []).map((e: any) => [e.id, e]))
-
-  // Verificar se bateu a meta nas 2 sessões
-  const sessionResults = workoutIds.map((wid: any) => {
-    const sessionResults = results.filter((r: any) => r.daily_workout_id === wid)
-    return sessionResults.every((r: any) => {
-      const exercise = exerciseMap.get(r.skill_exercise_id)
-      if (!exercise) return false
-      if (exercise.reps && r.reps_achieved) return r.reps_achieved >= exercise.reps
-      if (exercise.time_sec && r.time_achieved_sec) return r.time_achieved_sec >= exercise.time_sec
-      return false
-    })
-  })
-
-  const allSessionsCompleted = sessionResults.every(Boolean)
-  if (!allSessionsCompleted) return
-
-  // Verificar esforço percebido (máx 2 = fácil nas últimas 3 sessões)
-  const avgEffort = results.reduce((sum: number, r: any) => sum + (r.perceived_effort ?? 3), 0) / results.length
-  if (avgEffort > 2.5) return // ainda está custando esforço, não sobe
-
-  // Avançar nível!
-  const nextLevel = currentLevel === 'iniciante' ? 'intermediario' : 'avancado'
-
-  await Promise.all([
-    supabase
-      .from('user_skill_progress')
-      .update({
-        level: nextLevel,
-        week_number: currentWeek + 1,
-        sessions_at_current_level: 0,
-        level_updated_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', userId)
-      .eq('skill_id', skillId),
-
-    supabase
-      .from('skill_level_history')
-      .insert({
-        user_id: userId,
-        skill_id: skillId,
-        from_level: currentLevel,
-        to_level: nextLevel,
-        week_number: currentWeek,
-      }),
-  ])
-}
-
 // ── Função principal: gerar treino do dia ────────────────────────────
 export async function generateDailyWorkouts(userId: string): Promise<GeneratedWorkout[]> {
   const supabase = createClient()
@@ -466,22 +377,11 @@ export async function generateDailyWorkouts(userId: string): Promise<GeneratedWo
     const progress = skillProgress.find(p => p.skill_id === skillId)
     if (!progress) continue
 
-    // Verificar progressão de nível antes de gerar
-    await checkLevelProgression(
-      supabase, userId, skillId,
-      progress.level, progress.week_number
-    )
-
-    // Re-buscar após possível atualização de nível
-    const { data: updatedProgress } = await supabase
-      .from('user_skill_progress')
-      .select('level, week_number')
-      .eq('user_id', userId)
-      .eq('skill_id', skillId)
-      .single()
-
-    const level = updatedProgress?.level ?? progress.level
-    const weekNumber = updatedProgress?.week_number ?? progress.week_number
+    // A progressão de nível acontece em /api/workouts/complete/route.ts
+    // logo após o aluno concluir um treino — não precisa ser reavaliada
+    // aqui na geração, o progress já reflete o estado atual.
+    const level = progress.level
+    const weekNumber = progress.week_number
 
     // Selecionar exercícios
     const exercises = await selectExercises(

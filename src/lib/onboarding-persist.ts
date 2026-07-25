@@ -178,3 +178,30 @@ export async function initializeSkillProgress(userId: string) {
 
   if (error) console.error('[initializeSkillProgress]', error)
 }
+
+// ── Leitura para pré-preenchimento do onboarding ──────────────────────
+//
+// Usada por cada tela via useEffect para restaurar valores já salvos
+// quando o aluno navega para frente e para trás entre os steps.
+export async function getOnboardingResponses(userId: string) {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('onboarding_responses')
+    .select('motivacao, objetivo, skills, trava, pushups, pullups, squats, frequencia, dias_semana, current_step')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  return data
+}
+
+// Peso e altura ficam em profiles, não em onboarding_responses
+export async function getProfilePesoAltura(userId: string) {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('profiles')
+    .select('weight_kg, height_cm')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  return data
+}

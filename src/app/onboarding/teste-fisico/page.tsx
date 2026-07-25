@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Slider } from '@/components/ui/slider'
 import { createClient } from '@/lib/supabase/client'
-import { saveTesteFisico, saveCurrentStep } from '@/lib/onboarding-persist'
+import { saveTesteFisico, saveCurrentStep, getOnboardingResponses } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -36,6 +36,23 @@ export default function OnboardingTesteFisico() {
   const router = useRouter()
   const [values, setValues] = useState({ pushups: 0, pullups: 0, squats: 0 })
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const data = await getOnboardingResponses(user.id)
+      if (data) {
+        setValues({
+          pushups: data.pushups ?? 0,
+          pullups: data.pullups ?? 0,
+          squats:  data.squats  ?? 0,
+        })
+      }
+    }
+    load()
+  }, [])
 
   async function handleNext() {
     setSaving(true)

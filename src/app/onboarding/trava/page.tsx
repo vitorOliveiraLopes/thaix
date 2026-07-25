@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { saveTrava, saveCurrentStep } from '@/lib/onboarding-persist'
+import { saveTrava, saveCurrentStep, getOnboardingResponses } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -20,6 +20,17 @@ export default function OnboardingTrava() {
   const router = useRouter()
   const [selected, setSelected] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const data = await getOnboardingResponses(user.id)
+      if (data?.trava) setSelected(data.trava)
+    }
+    load()
+  }, [])
 
   async function handleNext() {
     if (!selected) return

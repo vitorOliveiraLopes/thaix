@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import {
+  sessionMetAllGoals,
+  shouldProgressLevel,
+  nextLevel,
+  evaluateAchievements as evaluateAchievementsRule,
+  detectNewPRs,
+  type ExerciseGoal,
+  type ExerciseResult as RuleExerciseResult,
+  type AchievementRule,
+  type Protocol,
+} from '@/lib/business-rules'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -41,7 +52,12 @@ async function createAuthClient() {
 // SERVICE_ROLE_KEY não necessária — usando sessão do usuário via RLS
 type AdminClient = any
 
-// ─── Lógica de negócio ───────────────────────────────────────────────────────
+// ─── Lógica de negócio (I/O) ──────────────────────────────────────────────────
+//
+// Estas funções continuam responsáveis por buscar/gravar no Supabase.
+// As DECISÕES (bateu meta? deve progredir? qual conquista desbloqueia?)
+// agora vêm de src/lib/business-rules.ts — funções puras, testadas em
+// src/lib/__tests__/business-rules.test.ts, sem I/O.
 
 async function saveResults(
   admin: any,
@@ -117,36 +133,52 @@ async function checkLevelProgression(
   const items   = (itemsRes.data   ?? []) as any[]
   if (results.length === 0) return
 
-  const metGoal = workoutIds.every(wid => {
-    const sResults = (results as any[]).filter((r: any) => r.daily_workout_id === wid)
-    const sItems   = (items as any[]).filter((i: any) => i.daily_workout_id === wid)
-    if (!sResults.length || !sItems.length) return false
-    return sResults.every((r: any) => {
-      const item = sItems.find((i: any) => i.skill_exercise_id === r.skill_exercise_id)
-      if (!item) return false
-      if (item.reps)     return (r.reps_achieved     ?? 0) >= item.reps
-      if (item.time_sec) return (r.time_achieved_sec ?? 0) >= item.time_sec
-      return false
-    })
+  // Usa as funções puras de business-rules.ts para decidir se cada sessão
+  // bateu todas as metas — não há mais lógica de decisão inline aqui.
+  const sessionsAllMetGoal: boolean[] = workoutIds.map((wid: string) => {
+    const sGoals: ExerciseGoal[] = items
+      .filter((i: any) => i.daily_workout_id === wid)
+      .map((i: any) => ({ skill_exercise_id: i.skill_exercise_id, reps: i.reps, time_sec: i.time_sec }))
+
+    const sResults: RuleExerciseResult[] = results
+      .filter((r: any) => r.daily_workout_id === wid)
+      .map((r: any) => ({
+        skill_exercise_id: r.skill_exercise_id,
+        reps_achieved:     r.reps_achieved,
+        time_achieved_sec: r.time_achieved_sec,
+        perceived_effort:  r.perceived_effort ?? 3,
+      }))
+
+    return sessionMetAllGoals(sGoals, sResults)
   })
 
-  if (!metGoal) return
+  const ruleResults: RuleExerciseResult[] = results.map((r: any) => ({
+    skill_exercise_id: r.skill_exercise_id,
+    reps_achieved:     r.reps_achieved,
+    time_achieved_sec: r.time_achieved_sec,
+    perceived_effort:  r.perceived_effort ?? 3,
+  }))
 
-  const avgEffort =
-    results.reduce((sum: number, r: any) => sum + (r.perceived_effort ?? 3), 0) / results.length
-  if (avgEffort > 2.5) return
+  const shouldProgress = shouldProgressLevel({
+    currentLevel: currentLevel as Protocol,
+    sessionsAllMetGoal,
+    results: ruleResults,
+  })
 
-  const nextLevel = currentLevel === 'iniciante' ? 'intermediario' : 'avancado'
+  if (!shouldProgress) return
+
+  const nextLvl = nextLevel(currentLevel as Protocol)
+
   await Promise.all([
     admin.from('user_skill_progress').update({
-      level: nextLevel, week_number: currentWeek + 1,
+      level: nextLvl, week_number: currentWeek + 1,
       sessions_at_current_level: 0,
       level_updated_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('user_id', userId).eq('skill_id', skillId),
     admin.from('skill_level_history').insert({
       user_id: userId, skill_id: skillId,
-      from_level: currentLevel, to_level: nextLevel,
+      from_level: currentLevel, to_level: nextLvl,
       week_number: currentWeek, changed_at: new Date().toISOString(),
     }),
   ])
@@ -174,30 +206,35 @@ async function checkAndInsertAutoPRs(
     .from('pr_entries').select('exercise_id, value, unit')
     .eq('user_id', userId).in('exercise_id', exerciseIds)
 
-  const bestPRMap = new Map<string, number>()
-  for (const pr of (existingPRs ?? [])) {
-    const key = `${pr.exercise_id}|${pr.unit}`
-    const cur = bestPRMap.get(key)
-    if (cur === undefined || pr.value > cur) bestPRMap.set(key, pr.value)
-  }
+  const existingBests = ((existingPRs ?? []) as any[]).map((pr: any) => ({
+    exerciseId: pr.exercise_id as string,
+    value:      pr.value as number,
+    unit:       pr.unit as 'reps' | 'seconds',
+  }))
+
+  const ruleResults: RuleExerciseResult[] = results.map(r => ({
+    skill_exercise_id: r.skill_exercise_id,
+    reps_achieved:     r.reps_achieved,
+    time_achieved_sec: r.time_achieved_sec,
+    perceived_effort:  r.perceived_effort,
+  }))
+
+  // Decisão de quais são realmente novos PRs vem de business-rules.ts
+  const newPRs = detectNewPRs(existingBests, ruleResults)
+
+  if (newPRs.length === 0) return
 
   const today = new Date().toISOString().split('T')[0]
-  const newPRs: object[] = []
-  for (const r of results) {
-    if ((r.reps_achieved ?? 0) > 0) {
-      const key = `${r.skill_exercise_id}|reps`
-      if ((bestPRMap.get(key) ?? -1) < r.reps_achieved!)
-        newPRs.push({ user_id: userId, exercise_id: r.skill_exercise_id,
-          value: r.reps_achieved, unit: 'reps', date: today, notes: 'Registrado automaticamente' })
-    }
-    if ((r.time_achieved_sec ?? 0) > 0) {
-      const key = `${r.skill_exercise_id}|seconds`
-      if ((bestPRMap.get(key) ?? -1) < r.time_achieved_sec!)
-        newPRs.push({ user_id: userId, exercise_id: r.skill_exercise_id,
-          value: r.time_achieved_sec, unit: 'seconds', date: today, notes: 'Registrado automaticamente' })
-    }
-  }
-  if (newPRs.length > 0) await admin.from('pr_entries').insert(newPRs)
+  await admin.from('pr_entries').insert(
+    newPRs.map(pr => ({
+      user_id:     userId,
+      exercise_id: pr.exerciseId,
+      value:       pr.value,
+      unit:        pr.unit,
+      date:        today,
+      notes:       'Registrado automaticamente',
+    }))
+  )
 }
 
 async function evaluateAchievements(
@@ -213,10 +250,23 @@ async function evaluateAchievements(
       .order('changed_at', { ascending: false }).limit(1),
   ])
 
-  const all         = (allRes.data ?? []) as any[]
-  const unlockedIds = new Set((unlockedRes.data ?? []).map((u: any) => u.achievement_id))
-  const total       = totalRes.count ?? 0
-  const latestLevel = levelRes.data?.[0] ?? null
+  const rules: AchievementRule[] = ((allRes.data ?? []) as any[]).map((a: any) => ({
+    id:                 a.id,
+    type:               a.type,
+    threshold:          a.threshold,
+    skill_exercise_id:  a.skill_exercise_id,
+    skill_id:           a.skill_id,
+    target_level:       a.target_level,
+  }))
+
+  const alreadyUnlockedIds = new Set(
+    ((unlockedRes.data ?? []) as any[]).map((u: any) => u.achievement_id)
+  )
+  const totalWorkoutsCompleted = totalRes.count ?? 0
+  const latestLevelRow = levelRes.data?.[0] ?? null
+  const latestLevelUp = latestLevelRow
+    ? { skillId: latestLevelRow.skill_id as string, toLevel: latestLevelRow.to_level as string }
+    : null
 
   const { data: executed } = await admin
     .from('daily_workout_items')
@@ -224,15 +274,17 @@ async function evaluateAchievements(
     .eq('daily_workouts.user_id', userId)
     .not('daily_workouts.completed_at', 'is', null)
 
-  const executedIds = new Set((executed ?? []).map((i: any) => i.skill_exercise_id))
-  const toUnlock: string[] = []
+  const executedExerciseIds = new Set(
+    ((executed ?? []) as any[]).map((i: any) => i.skill_exercise_id)
+  )
 
-  for (const a of all) {
-    if (unlockedIds.has(a.id)) continue
-    if (a.type === 'session_count' && total >= (a.threshold ?? 0)) toUnlock.push(a.id)
-    else if (a.type === 'skill_exercise' && a.skill_exercise_id && executedIds.has(a.skill_exercise_id)) toUnlock.push(a.id)
-    else if (a.type === 'skill_level' && latestLevel && a.skill_id === skillId && a.target_level === latestLevel.to_level) toUnlock.push(a.id)
-  }
+  // Decisão de quais conquistas desbloqueiam vem de business-rules.ts
+  const toUnlock = evaluateAchievementsRule(rules, {
+    totalWorkoutsCompleted,
+    executedExerciseIds,
+    latestLevelUp,
+    alreadyUnlockedIds,
+  })
 
   if (toUnlock.length === 0) return []
 
@@ -254,7 +306,6 @@ export async function POST(req: NextRequest) {
     const authClient = await createAuthClient()
     const { data: { user }, error: authError } = await authClient.auth.getUser()
 
-    // Log completo para diagnóstico — aparece no terminal do next dev e no Vercel Functions Log
     if (authError || !user) {
       const allCookies = req.cookies.getAll()
       console.error('[complete] Auth failed', {
@@ -279,9 +330,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Passo 3: verificar ownership via authClient + RLS ───────────────────
-    // O authClient usa a sessão do usuário — a RLS garante que ele só enxerga
-    // seus próprios workouts. Se retornar null, o treino não pertence a ele.
-    // Esta abordagem funciona mesmo sem SERVICE_ROLE_KEY configurada.
     const { data: owned, error: ownershipError } = await authClient
       .from('daily_workouts')
       .select('id')
@@ -297,9 +345,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
     }
 
-        // ── Passo 4: executar lógica de negócio com authClient (sessão do usuário + RLS)
-    // Não depende de SERVICE_ROLE_KEY — a RLS garante que o usuário só
-    // escreve nos próprios dados.
+    // ── Passo 4: executar lógica de negócio com authClient (sessão do usuário + RLS)
     const admin = authClient
     await saveResults(admin, workoutId, results)
     const workout = await markWorkoutComplete(admin, workoutId, user.id)

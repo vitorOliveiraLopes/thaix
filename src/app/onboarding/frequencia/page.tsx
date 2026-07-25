@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { saveFrequencia, saveCurrentStep, saveHorarios } from '@/lib/onboarding-persist'
+import { saveFrequencia, saveCurrentStep, saveHorarios, getOnboardingResponses } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -21,13 +21,6 @@ const WEEKDAYS = [
   { label: 'Sáb', index: 6 },
 ]
 
-// Sugestões de preset para facilitar a seleção inicial
-const PRESETS = [
-  { label: '3×/semana',  days: [1, 3, 5] },
-  { label: '4×/semana',  days: [1, 2, 4, 6] },
-  { label: '5×/semana',  days: [1, 2, 3, 4, 6] },
-]
-
 const MIN_DAYS = 2
 const MAX_DAYS = 6
 
@@ -35,10 +28,39 @@ const MAX_DAYS = 6
 
 export default function OnboardingFrequencia() {
   const router = useRouter()
-  const [activeDays, setActiveDays] = useState<number[]>(PRESETS[1].days) // 4×/semana default
+  const [activeDays, setActiveDays] = useState<number[]>([1, 2, 4, 6]) // 4×/semana como sugestão inicial
   const [horarioTreino, setHorarioTreino] = useState('07:30')
   const [horarioHidratacao, setHorarioHidratacao] = useState('14:00')
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // dias_semana em onboarding_responses
+      const data = await getOnboardingResponses(user.id)
+      if (Array.isArray(data?.dias_semana) && data.dias_semana.length > 0) {
+        setActiveDays(data.dias_semana)
+      }
+
+      // Horários ficam em user_settings.notifications
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('notifications')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (settings?.notifications?.workout?.time) {
+        setHorarioTreino(settings.notifications.workout.time)
+      }
+      if (settings?.notifications?.hydration?.time) {
+        setHorarioHidratacao(settings.notifications.hydration.time)
+      }
+    }
+    load()
+  }, [])
 
   function toggleDay(index: number) {
     setActiveDays(prev => {
@@ -47,10 +69,6 @@ export default function OnboardingFrequencia() {
       if (isActive && prev.length <= MIN_DAYS) return prev
       return isActive ? prev.filter(d => d !== index) : [...prev, index]
     })
-  }
-
-  function applyPreset(days: number[]) {
-    setActiveDays(days)
   }
 
   async function handleNext() {
@@ -112,34 +130,6 @@ export default function OnboardingFrequencia() {
                     )}
                   >
                     {label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Presets */}
-          <div>
-            <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase mb-2">
-              SUGESTÕES RÁPIDAS
-            </p>
-            <div className="flex gap-2">
-              {PRESETS.map(preset => {
-                const isSelected =
-                  preset.days.length === activeDays.length &&
-                  preset.days.every(d => activeDays.includes(d))
-                return (
-                  <button
-                    key={preset.label}
-                    onClick={() => applyPreset(preset.days)}
-                    className={cn(
-                      'flex-1 py-2 rounded-xl border text-xs font-bold transition-all',
-                      isSelected
-                        ? 'bg-primary/10 border-primary text-primary'
-                        : 'border-border text-muted-foreground hover:border-primary/40'
-                    )}
-                  >
-                    {preset.label}
                   </button>
                 )
               })}

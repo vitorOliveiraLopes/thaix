@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { saveSkills, saveCurrentStep } from '@/lib/onboarding-persist'
+import { saveSkills, saveCurrentStep, getOnboardingResponses } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -58,6 +58,21 @@ export default function OnboardingSkills() {
   const router = useRouter()
   const [selected, setSelected] = useState<SkillId[]>([])
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const data = await getOnboardingResponses(user.id)
+      if (Array.isArray(data?.skills)) {
+        setSelected(data.skills.filter((s: string): s is SkillId =>
+          SKILL_OPTIONS.some(opt => opt.value === s)
+        ))
+      }
+    }
+    load()
+  }, [])
 
   function toggle(value: SkillId) {
     setSelected(prev =>

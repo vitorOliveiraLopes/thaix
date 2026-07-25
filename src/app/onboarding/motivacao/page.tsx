@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { saveMotivacao, saveCurrentStep } from '@/lib/onboarding-persist'
+import { saveMotivacao, saveCurrentStep, getOnboardingResponses } from '@/lib/onboarding-persist'
 import { OnboardingHeader } from '@/components/onboarding/OnboardingHeader'
 import { CoachBubble } from '@/components/onboarding/CoachBubble'
 
@@ -22,6 +22,18 @@ export default function OnboardingMotivacao() {
   const router = useRouter()
   const [selected, setSelected] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // Pré-carregar valor já salvo (permite voltar/avançar sem perder seleção)
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const data = await getOnboardingResponses(user.id)
+      if (data?.motivacao) setSelected(data.motivacao)
+    }
+    load()
+  }, [])
 
   async function handleNext() {
     if (!selected) return
