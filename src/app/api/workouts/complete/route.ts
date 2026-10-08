@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { getRouteClient } from '@/lib/supabase/route-client'
 import {
   sessionMetAllGoalsMultiSet,
   shouldProgressLevel,
@@ -37,25 +36,6 @@ type RequestBody = {
 
 // ─── Clientes Supabase ────────────────────────────────────────────────────────
 
-async function createAuthClient() {
-  const cookieStore = await cookies()
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (toSet) => {
-          try {
-            toSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          } catch {}
-        },
-      },
-    }
-  )
-}
 
 // SERVICE_ROLE_KEY não necessária — usando sessão do usuário via RLS
 type AdminClient = any
@@ -332,16 +312,12 @@ async function evaluateAchievements(
 
 export async function POST(req: NextRequest) {
   try {
-    // ── Passo 1: tentar autenticação via cookie ──────────────────────────────
-    const authClient = await createAuthClient()
-    const { data: { user }, error: authError } = await authClient.auth.getUser()
+    // ── Passo 1: autenticação (Bearer do app ou cookie da web) ───────────────
+    const { client: authClient, user } = await getRouteClient(req)
 
-    if (authError || !user) {
-      const allCookies = req.cookies.getAll()
+    if (!authClient || !user) {
       console.error('[complete] Auth failed', {
-        authError:      authError?.message ?? null,
-        cookieNames:    allCookies.map(c => c.name),
-        hasSbCookie:    allCookies.some(c => c.name.startsWith('sb-')),
+        hasBearer: req.headers.get('authorization')?.toLowerCase().startsWith('bearer ') ?? false,
       })
       return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
     }
