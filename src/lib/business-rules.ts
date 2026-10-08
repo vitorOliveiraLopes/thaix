@@ -256,3 +256,90 @@ export function calculateStreak(workoutDates: string[], todayISO: string): numbe
   }
   return streak
 }
+
+// ─── Múltiplas séries por exercício ──────────────────────────────────────────
+
+/**
+ * Retorna o melhor valor entre as séries realizadas (usado para PR e para
+ * o valor "resumo" de reps_achieved/time_achieved_sec). Ignora nulos.
+ */
+export function bestOfSets(values: (number | null | undefined)[]): number {
+  const valid = values.filter((v): v is number => v !== null && v !== undefined)
+  return valid.length > 0 ? Math.max(...valid) : 0
+}
+
+/**
+ * Quantas séries, dentre as realizadas, bateram a meta (reps OU tempo).
+ */
+export function countSetsMetGoal(
+  goal: { reps?: number | null; time_sec?: number | null },
+  achieved: (number | null | undefined)[]
+): number {
+  return achieved.filter(v => {
+    if (v === null || v === undefined) return false
+    if (goal.reps)     return v >= goal.reps
+    if (goal.time_sec) return v >= goal.time_sec
+    return false
+  }).length
+}
+
+/**
+ * Fração mínima de séries que precisam bater a meta para o exercício contar
+ * como "sucesso" na progressão de nível. Regra: 2 de 3 séries (arredondado
+ * para 2/3 do total em exercícios com número diferente de séries).
+ * Ex: 3 séries → precisa de 2. 2 séries → precisa das 2. 1 série → precisa de 1.
+ */
+export function setsRequiredToPass(totalSets: number): number {
+  return Math.max(1, Math.ceil((totalSets * 2) / 3))
+}
+
+/**
+ * Verifica se um exercício com múltiplas séries "bateu a meta" no sentido
+ * flexível aprovado para progressão: pelo menos setsRequiredToPass(totalSets)
+ * séries precisam ter atingido reps/tempo alvo.
+ */
+export function exerciseMetGoalMultiSet(
+  goal: { reps?: number | null; time_sec?: number | null },
+  achieved: (number | null | undefined)[],
+  totalSets: number
+): boolean {
+  const passed = countSetsMetGoal(goal, achieved)
+  return passed >= setsRequiredToPass(totalSets)
+}
+
+export type MultiSetExerciseGoal = {
+  skill_exercise_id: string
+  sets: number
+  reps?: number | null
+  time_sec?: number | null
+}
+
+export type MultiSetExerciseResult = {
+  skill_exercise_id: string
+  reps_per_set?: (number | null)[]
+  time_per_set?: (number | null)[]
+  perceived_effort: number
+}
+
+/**
+ * Versão multi-série de sessionMetAllGoals: verifica se TODOS os
+ * exercícios da sessão bateram a meta (usando o critério de 2/3 séries
+ * por exercício, via exerciseMetGoalMultiSet).
+ */
+export function sessionMetAllGoalsMultiSet(
+  goals: MultiSetExerciseGoal[],
+  results: MultiSetExerciseResult[]
+): boolean {
+  if (goals.length === 0 || results.length === 0) return false
+
+  return results.every(r => {
+    const goal = goals.find(g => g.skill_exercise_id === r.skill_exercise_id)
+    if (!goal) return false
+
+    const achieved = goal.time_sec
+      ? (r.time_per_set ?? [])
+      : (r.reps_per_set ?? [])
+
+    return exerciseMetGoalMultiSet(goal, achieved, goal.sets)
+  })
+}

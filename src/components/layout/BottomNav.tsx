@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Dumbbell, BookOpen, User } from 'lucide-react'
+import { Home, Dumbbell, BookOpen, User, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
   { href: '/home',    label: 'Início',   icon: Home },
   { href: '/treinos', label: 'Desempenho',  icon: Dumbbell },
   { href: '/cursos',  label: 'Técnicas',   icon: BookOpen },
+  { href: '/chat',    label: 'Chat',       icon: MessageCircle },
   { href: '/perfil',  label: 'Perfil',   icon: User },
 ]
 

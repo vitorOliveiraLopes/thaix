@@ -2,21 +2,29 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import {
-  sessionMetAllGoals,
+  sessionMetAllGoalsMultiSet,
   shouldProgressLevel,
   nextLevel,
   evaluateAchievements as evaluateAchievementsRule,
   detectNewPRs,
-  type ExerciseGoal,
+  bestOfSets,
   type ExerciseResult as RuleExerciseResult,
   type AchievementRule,
   type Protocol,
+  type MultiSetExerciseGoal,
+  type MultiSetExerciseResult,
 } from '@/lib/business-rules'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type WorkoutResult = {
   skill_exercise_id: string
+  // Valores por série (novo) — usados para o critério de progressão de
+  // 2/3 séries e para calcular a melhor série (PR).
+  reps_per_set?: (number | null)[]
+  time_per_set?: (number | null)[]
+  // Mantidos para compatibilidade: sempre calculados como a MELHOR série
+  // antes do envio. PRs e resumos continuam usando estes dois campos.
   reps_achieved?: number
   time_achieved_sec?: number
   perceived_effort: number
@@ -64,14 +72,24 @@ async function saveResults(
   workoutId: string,
   results: WorkoutResult[]
 ): Promise<void> {
-  const rows = results.map(r => ({
-    daily_workout_id:  workoutId,
-    skill_exercise_id: r.skill_exercise_id,
-    reps_achieved:     r.reps_achieved     ?? null,
-    time_achieved_sec: r.time_achieved_sec ?? null,
-    perceived_effort:  r.perceived_effort,
-    completed_at:      new Date().toISOString(),
-  }))
+  const rows = results.map(r => {
+    // reps_achieved/time_achieved_sec sempre recalculados no servidor a
+    // partir das séries — nunca confiamos no valor "resumo" vindo do
+    // cliente. Isso também cobre exercícios de 1 série (array com 1 item).
+    const bestReps = r.reps_per_set?.length ? bestOfSets(r.reps_per_set) : r.reps_achieved
+    const bestTime = r.time_per_set?.length ? bestOfSets(r.time_per_set) : r.time_achieved_sec
+
+    return {
+      daily_workout_id:  workoutId,
+      skill_exercise_id: r.skill_exercise_id,
+      reps_achieved:     bestReps ?? null,
+      time_achieved_sec: bestTime ?? null,
+      reps_per_set:      r.reps_per_set ?? null,
+      time_per_set:      r.time_per_set ?? null,
+      perceived_effort:  r.perceived_effort,
+      completed_at:      new Date().toISOString(),
+    }
+  })
 
   const { error } = await admin
     .from('daily_workout_results')
@@ -121,11 +139,11 @@ async function checkLevelProgression(
   const [resultsRes, itemsRes] = await Promise.all([
     admin
       .from('daily_workout_results')
-      .select('reps_achieved, time_achieved_sec, perceived_effort, daily_workout_id, skill_exercise_id')
+      .select('reps_achieved, time_achieved_sec, reps_per_set, time_per_set, perceived_effort, daily_workout_id, skill_exercise_id')
       .in('daily_workout_id', workoutIds),
     admin
       .from('daily_workout_items')
-      .select('skill_exercise_id, reps, time_sec, daily_workout_id')
+      .select('skill_exercise_id, sets, reps, time_sec, daily_workout_id')
       .in('daily_workout_id', workoutIds),
   ])
 
@@ -134,22 +152,34 @@ async function checkLevelProgression(
   if (results.length === 0) return
 
   // Usa as funções puras de business-rules.ts para decidir se cada sessão
-  // bateu todas as metas — não há mais lógica de decisão inline aqui.
+  // bateu a meta — critério de 2/3 séries por exercício, não mais "tudo
+  // ou nada". Compatível com resultados antigos (sem reps_per_set salvo):
+  // nesse caso o array cai para [reps_achieved], mantendo o comportamento
+  // anterior automaticamente.
   const sessionsAllMetGoal: boolean[] = workoutIds.map((wid: string) => {
-    const sGoals: ExerciseGoal[] = items
+    const sGoals: MultiSetExerciseGoal[] = items
       .filter((i: any) => i.daily_workout_id === wid)
-      .map((i: any) => ({ skill_exercise_id: i.skill_exercise_id, reps: i.reps, time_sec: i.time_sec }))
+      .map((i: any) => ({
+        skill_exercise_id: i.skill_exercise_id,
+        sets:              i.sets ?? 1,
+        reps:              i.reps,
+        time_sec:          i.time_sec,
+      }))
 
-    const sResults: RuleExerciseResult[] = results
+    const sResults: MultiSetExerciseResult[] = results
       .filter((r: any) => r.daily_workout_id === wid)
       .map((r: any) => ({
         skill_exercise_id: r.skill_exercise_id,
-        reps_achieved:     r.reps_achieved,
-        time_achieved_sec: r.time_achieved_sec,
+        reps_per_set:      (r.reps_per_set && r.reps_per_set.length > 0)
+          ? r.reps_per_set
+          : (r.reps_achieved !== null && r.reps_achieved !== undefined ? [r.reps_achieved] : []),
+        time_per_set:      (r.time_per_set && r.time_per_set.length > 0)
+          ? r.time_per_set
+          : (r.time_achieved_sec !== null && r.time_achieved_sec !== undefined ? [r.time_achieved_sec] : []),
         perceived_effort:  r.perceived_effort ?? 3,
       }))
 
-    return sessionMetAllGoals(sGoals, sResults)
+    return sessionMetAllGoalsMultiSet(sGoals, sResults)
   })
 
   const ruleResults: RuleExerciseResult[] = results.map((r: any) => ({
@@ -345,9 +375,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
     }
 
-    // ── Passo 4: executar lógica de negócio com authClient (sessão do usuário + RLS)
+    // ── Passo 4: normalizar resultados (melhor série calculada uma vez,
+    // usada tanto para salvar quanto para PRs — fonte única de verdade)
+    const normalizedResults: WorkoutResult[] = results.map(r => ({
+      ...r,
+      reps_achieved:     r.reps_per_set?.length ? bestOfSets(r.reps_per_set) : r.reps_achieved,
+      time_achieved_sec: r.time_per_set?.length ? bestOfSets(r.time_per_set) : r.time_achieved_sec,
+    }))
+
     const admin = authClient
-    await saveResults(admin, workoutId, results)
+    await saveResults(admin, workoutId, normalizedResults)
     const workout = await markWorkoutComplete(admin, workoutId, user.id)
     const skillId = workout.skill_id
 
@@ -362,7 +399,7 @@ export async function POST(req: NextRequest) {
       incrementSessionCount(admin, user.id, skillId),
       checkLevelProgression(admin, user.id, skillId,
         progress?.level ?? 'iniciante', progress?.week_number ?? 1),
-      checkAndInsertAutoPRs(admin, user.id, results),
+      checkAndInsertAutoPRs(admin, user.id, normalizedResults),
     ])
 
     const newAchievements = await evaluateAchievements(admin, user.id, workoutId, skillId)
