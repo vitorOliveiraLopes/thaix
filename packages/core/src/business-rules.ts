@@ -2,8 +2,8 @@
  * ThaixSkill — Regras de negócio puras
  *
  * Funções sem I/O (sem Supabase, sem fetch) usadas por
- * src/app/api/workouts/complete/route.ts e src/lib/workout-generator.ts.
- * Testadas isoladamente em src/lib/__tests__/business-rules.test.ts.
+ * apps/api (route de conclusão), pelo gerador em ./generator.ts e pelo app.
+ * Testadas isoladamente em ./__tests__/business-rules.test.ts.
  */
 
 // ─── Onboarding: score e protocolo recomendado ───────────────────────────────

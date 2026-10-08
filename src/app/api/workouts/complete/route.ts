@@ -13,7 +13,7 @@ import {
   type Protocol,
   type MultiSetExerciseGoal,
   type MultiSetExerciseResult,
-} from '@/lib/business-rules'
+} from '@thaix/core'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ type AdminClient = any
 //
 // Estas funções continuam responsáveis por buscar/gravar no Supabase.
 // As DECISÕES (bateu meta? deve progredir? qual conquista desbloqueia?)
-// agora vêm de src/lib/business-rules.ts — funções puras, testadas em
+// agora vêm de @thaix/core (packages/core/src/business-rules.ts) — funções puras, testadas em
 // src/lib/__tests__/business-rules.test.ts, sem I/O.
 
 async function saveResults(
