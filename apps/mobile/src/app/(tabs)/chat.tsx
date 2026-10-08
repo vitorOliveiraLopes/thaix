@@ -1,14 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { memo, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button, Card, Txt, tapFeedback, type IconName } from '@/components/ui';
+import { Button, Card, IconButton, Txt, tapFeedback, type IconName } from '@/components/ui';
 import { useUserId } from '@/lib/account';
 import { apiPost } from '@/lib/api';
-import { useChatHistory, type ChatAction, type ChatEntry, type ChatMessage } from '@/lib/chat';
+import { clearChat, useChatHistory, type ChatAction, type ChatEntry, type ChatMessage } from '@/lib/chat';
 import { toLocalISODate, type ActionState } from '@thaix/core';
 import { qk } from '@/lib/query';
 import { radius, spacing, useTheme } from '@/theme';
@@ -98,15 +98,41 @@ export default function ChatScreen() {
     return error;
   }
 
+  function confirmClear() {
+    Alert.alert(
+      'Começar nova conversa?',
+      'O coach esquece esta conversa. O que você já confirmou (treino ajustado, registros, objetivos) continua salvo.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Nova conversa',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await clearChat(userId);
+              setLocal([]);
+            } catch {
+              setLocal([{ id: nextId('e'), role: 'assistant', content: 'Não consegui apagar a conversa agora. Tenta de novo?' }]);
+            }
+            await history.refetch();
+          },
+        },
+      ],
+    );
+  }
+
   const empty = !history.isPending && (history.data?.entries.length ?? 0) === 0 && local.length === 0;
 
   return (
     <SafeAreaView edges={['top']} style={[styles.flex, { backgroundColor: c.background }]}>
       <View style={styles.header}>
-        <Txt variant="title">Coach</Txt>
-        <Txt variant="small" color="muted">
-          Tire dúvidas ou registre dados do seu treino
-        </Txt>
+        <View style={styles.flex}>
+          <Txt variant="title">Coach</Txt>
+          <Txt variant="small" color="muted">
+            Tire dúvidas ou registre dados do seu treino
+          </Txt>
+        </View>
+        {!empty && !sending && <IconButton icon="create-outline" label="Nova conversa" onPress={confirmClear} />}
       </View>
 
       {/* Mede a própria posição na tela (abaixo do cabeçalho, acima das abas):
@@ -308,7 +334,7 @@ function ActionCard({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center' },
-  header: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm, gap: 2 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm },
   list: { padding: spacing.lg, gap: spacing.sm },
   bubble: { maxWidth: '85%', borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
   left: { alignSelf: 'flex-start', borderBottomLeftRadius: 4 },

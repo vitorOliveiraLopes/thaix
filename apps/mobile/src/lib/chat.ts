@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { buildChatTimeline, type ActionDbStatus, type ActionState } from '@thaix/core';
 
 import { qk } from './query';
@@ -23,7 +25,7 @@ const HISTORY_LIMIT = 50;
  * fechar ou a resposta demorar, nada se perde ao reabrir o chat.
  */
 export function useChatHistory(userId: string) {
-  return useQuery({
+  const query = useQuery({
     queryKey: qk.chat(userId),
     queryFn: async () => {
       const { data: rows, error } = await supabase
@@ -58,4 +60,26 @@ export function useChatHistory(userId: string) {
       return { entries: buildChatTimeline(messages, actions) as ChatEntry[], count: messages.length };
     },
   });
+
+  // A aba fica montada: ao voltar para ela, busca de novo (a conversa pode
+  // ter mudado em outro aparelho ou ter sido apagada).
+  const { refetch } = query;
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch]),
+  );
+  return query;
+}
+
+/**
+ * Apaga a conversa do aluno (mensagens e propostas). O coach começa do zero
+ * na conversa, mas continua vendo os dados do aluno (treino, box, objetivos).
+ */
+export async function clearChat(userId: string) {
+  // Propostas primeiro: se a segunda parte falhar, não sobram cards soltos.
+  const actions = await supabase.from('chat_pending_actions').delete().eq('user_id', userId);
+  if (actions.error) throw new Error(actions.error.message);
+  const messages = await supabase.from('chat_messages').delete().eq('user_id', userId);
+  if (messages.error) throw new Error(messages.error.message);
 }
