@@ -29,7 +29,7 @@ export const COACH_TOOLS = [
   {
     name: 'get_today_workout',
     kind: 'read',
-    description: 'Treino(s) de hoje com exercícios, séries, metas, duração estimada e se já foram concluídos. Use antes de propor qualquer ajuste no treino.',
+    description: 'Detalhes do treino de hoje (descanso e observações de cada exercício). O resumo do treino já está no contexto: NÃO chame só para propor ajuste.',
     input_schema: { type: 'object', properties: {} },
   },
   {
