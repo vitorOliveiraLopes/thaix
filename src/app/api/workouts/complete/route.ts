@@ -104,14 +104,21 @@ async function checkLevelProgression(
 ): Promise<void> {
   if (currentLevel === 'avancado') return
 
-  const { data: lastWorkouts } = await admin
-    .from('daily_workouts')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('skill_id', skillId)
-    .not('completed_at', 'is', null)
-    .order('completed_at', { ascending: false })
-    .limit(2)
+  // Treinos ajustados pelo coach (encurtados/aliviados) não contam para subir
+  // de nível. Sem a coluna `adjusted` (SQL da fase 2 não rodado), cai na
+  // consulta antiga.
+  const recent = (withAdjusted: boolean) => {
+    let q = admin
+      .from('daily_workouts')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('skill_id', skillId)
+      .not('completed_at', 'is', null)
+    if (withAdjusted) q = q.eq('adjusted', false)
+    return q.order('completed_at', { ascending: false }).limit(2)
+  }
+  let { data: lastWorkouts, error: recentError } = await recent(true)
+  if (recentError) ({ data: lastWorkouts } = await recent(false))
 
   if (!lastWorkouts || lastWorkouts.length < 2) return
 

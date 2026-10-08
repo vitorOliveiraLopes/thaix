@@ -25,6 +25,8 @@ export type SkillExercise = {
   rest_sec: number
   note: string | null
   order_index: number
+  /** Equipamentos necessários (ids de EQUIPMENT_OPTIONS). Vazio = nenhum. */
+  equipment?: string[] | null
 }
 
 /** Resultado de um exercício numa sessão concluída (linha de daily_workout_results). */
@@ -67,13 +69,31 @@ export const MUSCLE_GROUPS: Record<string, 'A' | 'B' | 'C'> = {
 /**
  * Máximo 2 skills por dia. Grupo A nunca repete no mesmo dia e roda pelo
  * índice do dia; HSPU não combina com grupo A; T2B combina com qualquer um.
+ *
+ * `focusSkill` (skill prioritária do aluno) entra em todo dia de treino,
+ * respeitando as mesmas combinações: foco em puxada fixa a vaga do grupo A,
+ * foco em HSPU tira a puxada do dia (HSPU não combina com ela).
  */
-export function selectSkillsForToday(allSkills: string[], dayIndex: number): string[] {
-  if (allSkills.length <= 2) return allSkills
+export function selectSkillsForToday(allSkills: string[], dayIndex: number, focusSkill?: string | null): string[] {
+  const focus = focusSkill && allSkills.includes(focusSkill) ? focusSkill : null
 
   const groupA = allSkills.filter(s => MUSCLE_GROUPS[s] === 'A')
   const groupB = allSkills.filter(s => MUSCLE_GROUPS[s] === 'B')
   const groupC = allSkills.filter(s => MUSCLE_GROUPS[s] === 'C')
+
+  // Com foco, a combinação parte da skill prioritária (vale para qualquer
+  // quantidade de skills, inclusive 2: puxada + HSPU nunca saem juntas).
+  if (focus) {
+    const group = MUSCLE_GROUPS[focus]
+    const partnerC = groupC.length > 0 ? groupC[dayIndex % groupC.length] : null
+    if (group === 'A' || group === 'B') return partnerC ? [focus, partnerC] : [focus]
+    if (group === 'C') {
+      const other = groupA.length > 0 ? groupA[dayIndex % groupA.length] : groupB[0]
+      return other ? [other, focus] : [focus]
+    }
+  }
+
+  if (allSkills.length <= 2) return allSkills
 
   const selected: string[] = []
 
@@ -93,6 +113,17 @@ export function selectSkillsForToday(allSkills: string[], dayIndex: number): str
   }
 
   return selected.slice(0, 2)
+}
+
+/**
+ * Exercícios que o aluno consegue fazer com o equipamento que tem.
+ * Exercício sem equipamento cadastrado (lista vazia) vale para todos.
+ * Sem equipamento informado pelo aluno, nada é filtrado.
+ */
+export function filterByEquipment<T extends { equipment?: string[] | null }>(pool: T[], available: string[] | null | undefined): T[] {
+  if (!available || available.length === 0) return pool
+  const have = new Set(available)
+  return pool.filter(e => (e.equipment ?? []).every(req => have.has(req)))
 }
 
 // ─── Perfil adaptativo ────────────────────────────────────────────────────────

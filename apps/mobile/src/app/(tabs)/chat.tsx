@@ -17,19 +17,37 @@ import { Button, Card, Txt, tapFeedback, type IconName } from '@/components/ui';
 import { useUserId } from '@/lib/account';
 import { apiPost } from '@/lib/api';
 import { useChatHistory, type ChatMessage, type PendingAction } from '@/lib/chat';
+import { toLocalISODate } from '@thaix/core';
 import { qk } from '@/lib/query';
 import { radius, spacing, useTheme } from '@/theme';
 
 const QUICK: { icon: IconName; label: string; prompt: string }[] = [
-  { icon: 'water-outline', label: 'Registrar hidratação', prompt: 'Quero registrar minha hidratação de hoje' },
-  { icon: 'scale-outline', label: 'Atualizar peso', prompt: 'Quero atualizar meu peso' },
-  { icon: 'trophy-outline', label: 'Registrar recorde', prompt: 'Quero registrar um recorde pessoal' },
-  { icon: 'help-circle-outline', label: 'Tirar uma dúvida', prompt: 'Tenho uma dúvida sobre meu treino' },
+  { icon: 'time-outline', label: 'Hoje tenho pouco tempo', prompt: 'Hoje só tenho 20 minutos para treinar. Consegue ajustar meu treino?' },
+  { icon: 'barbell-outline', label: 'Contar o WOD da box', prompt: 'Quero contar o que fiz hoje na box' },
+  { icon: 'trending-up-outline', label: 'Quanto falta para subir de nível?', prompt: 'Quanto falta para eu subir de nível nas minhas skills?' },
+  { icon: 'swap-horizontal-outline', label: 'Trocar um exercício', prompt: 'Quero trocar um exercício do treino de hoje' },
+  { icon: 'flag-outline', label: 'Definir um objetivo', prompt: 'Quero definir um objetivo para as minhas skills' },
 ];
+
+/** Cache que cada tipo de confirmação deixa desatualizado. */
+function keysToRefresh(userId: string, refresh: string[]) {
+  const keys: (readonly unknown[])[] = [];
+  for (const r of refresh) {
+    if (r === 'today' || r === 'skills') keys.push(['today-workouts', userId], ['workout']);
+    if (r === 'workout') keys.push(['workout']);
+    if (r === 'routine') keys.push(qk.onboarding(userId), ['today-workouts', userId]);
+    if (r === 'skills') keys.push(qk.skillProgress(userId));
+    if (r === 'home') keys.push(qk.home(userId));
+    if (r === 'progress') keys.push(qk.progress(userId));
+    if (r === 'prs') keys.push(qk.prs(userId));
+    if (r === 'account') keys.push(qk.account(userId));
+  }
+  return keys;
+}
 
 type Row = { kind: 'msg'; msg: ChatMessage } | { kind: 'action'; action: PendingAction } | { kind: 'typing' };
 
-type ChatResponse = { message?: string; pendingActions?: { id: string; toolName: string; summary: string }[] };
+type ChatResponse = { message?: string };
 
 export default function ChatScreen() {
   const c = useTheme();
@@ -37,64 +55,54 @@ export default function ChatScreen() {
   const client = useQueryClient();
   const history = useChatHistory(userId);
 
+  // Mensagens só locais: a do aluno enquanto o coach responde e avisos de erro.
   const [local, setLocal] = useState<ChatMessage[]>([]);
-  const [actions, setActions] = useState<PendingAction[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const counter = useRef(0);
 
   const nextId = (prefix: string) => `${prefix}-${++counter.current}`;
-  const messages = useMemo(() => [...(history.data ?? []), ...local], [history.data, local]);
+  const messages = useMemo(() => [...(history.data?.messages ?? []), ...local], [history.data, local]);
 
   // Lista invertida: o item 0 fica embaixo, perto do campo de texto.
   const rows: Row[] = useMemo(() => {
     const list: Row[] = [
       ...messages.map((msg) => ({ kind: 'msg' as const, msg })),
-      ...actions.filter((a) => a.status === 'pending').map((action) => ({ kind: 'action' as const, action })),
+      ...(history.data?.pending ?? []).map((action) => ({ kind: 'action' as const, action })),
     ];
     if (sending) list.push({ kind: 'typing' });
     return list.reverse();
-  }, [messages, actions, sending]);
-
-  function pushAssistant(content: string) {
-    setLocal((prev) => [...prev, { id: nextId('a'), role: 'assistant', content }]);
-  }
+  }, [messages, history.data, sending]);
 
   async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
     tapFeedback();
-    setLocal((prev) => [...prev, { id: nextId('u'), role: 'user', content: trimmed }]);
+    setLocal([{ id: nextId('u'), role: 'user', content: trimmed }]);
     setInput('');
     setSending(true);
+    let errorNote: string | null = null;
     try {
-      const res = await apiPost<ChatResponse>('/api/chat', { message: trimmed }, 60_000);
-      if (res.message) pushAssistant(res.message);
-      if (res.pendingActions?.length) {
-        setActions((prev) => [...prev, ...res.pendingActions!.map((a) => ({ ...a, status: 'pending' as const }))]);
-      }
+      // A data do aparelho: o servidor roda em UTC e "hoje" precisa ser o do aluno.
+      await apiPost<ChatResponse>('/api/chat', { message: trimmed, today: toLocalISODate(), dow: new Date().getDay() }, 70_000);
     } catch (e) {
-      pushAssistant(e instanceof Error && e.message ? `Não consegui responder agora: ${e.message}` : 'Não consegui responder agora. Tenta de novo?');
-    } finally {
-      setSending(false);
+      errorNote = e instanceof Error && e.message ? e.message : 'Não consegui responder agora. Tenta de novo?';
     }
+    // O servidor é a fonte da verdade (resposta, propostas e a própria mensagem).
+    await history.refetch();
+    setLocal(errorNote ? [{ id: nextId('e'), role: 'assistant', content: errorNote }] : []);
+    setSending(false);
   }
 
   async function resolve(id: string, confirmed: boolean) {
     try {
-      const res = await apiPost<{ message?: string }>('/api/chat/confirm', { actionId: id, confirmed });
-      setActions((prev) => prev.map((a) => (a.id === id ? { ...a, status: confirmed ? 'confirmed' : 'declined' } : a)));
-      if (res.message) pushAssistant(res.message);
-      if (confirmed) {
-        // O registro feito pelo chat aparece na home e no desempenho.
-        client.invalidateQueries({ queryKey: qk.home(userId) });
-        client.invalidateQueries({ queryKey: qk.progress(userId) });
-        client.invalidateQueries({ queryKey: qk.prs(userId) });
-        client.invalidateQueries({ queryKey: qk.account(userId) });
-      }
-    } catch {
-      pushAssistant('Não consegui processar essa ação. Tenta de novo?');
+      const res = await apiPost<{ success?: boolean; message?: string; refresh?: string[] }>('/api/chat/confirm', { actionId: id, confirmed });
+      // O que a ação mudou aparece na hora nas outras telas.
+      for (const key of keysToRefresh(userId, res.refresh ?? [])) client.invalidateQueries({ queryKey: key });
+    } catch (e) {
+      setLocal((prev) => [...prev, { id: nextId('e'), role: 'assistant', content: e instanceof Error && e.message ? e.message : 'Não consegui processar essa ação.' }]);
     }
+    await history.refetch();
   }
 
   const empty = !history.isPending && messages.length === 0;
@@ -200,7 +208,21 @@ function ActionCard({ action, onResolve }: { action: PendingAction; onResolve: (
   }
   return (
     <View style={[styles.action, styles.left, { backgroundColor: c.primarySoft, borderColor: c.primary }]}>
-      <Txt variant="label">{action.summary}</Txt>
+      <Txt variant="subheading">{action.summary}</Txt>
+      {action.preview.length > 0 && (
+        <View style={{ gap: 4 }}>
+          {action.preview.map((line, i) => (
+            <View key={i} style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <Txt variant="small" color="primary">
+                •
+              </Txt>
+              <Txt variant="small" style={{ flex: 1 }}>
+                {line}
+              </Txt>
+            </View>
+          ))}
+        </View>
+      )}
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
         <Button label="Confirmar" size="sm" icon="checkmark" onPress={() => handle(true)} loading={busy} style={{ flex: 1 }} />
         <Button label="Cancelar" size="sm" variant="outline" onPress={() => handle(false)} disabled={busy} />

@@ -1,80 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRouteClient } from '@/lib/supabase/route-client'
-import { executeAction } from '@/lib/chat-actions'
-import type { ChatToolName } from '@/lib/chat-tools'
 
+import { getRouteClient } from '@/lib/supabase/route-client'
+import { saoPauloToday, type CoachCtx } from '@/lib/coach/context'
+import { executeProposal } from '@/lib/coach/tools'
+
+/** Propostas mais velhas que isso precisam ser refeitas (o treino pode ter mudado). */
+const PROPOSAL_TTL_MS = 30 * 60_000
 
 // ─── POST /api/chat/confirm ───────────────────────────────────────────────────
 //
-// Único ponto do sistema que efetivamente grava uma ação proposta pelo chat.
-// Sempre exige que o aluno tenha clicado em "Confirmar" na tela.
+// Único ponto que grava uma ação proposta pelo coach, e só depois que o
+// aluno toca em Confirmar. Tudo roda com o token do aluno (RLS).
 
 export async function POST(req: NextRequest) {
   try {
-    const { client: authClient, user } = await getRouteClient(req)
-
-    if (!authClient || !user) {
-      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-    }
+    const { client, user } = await getRouteClient(req)
+    if (!client || !user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
     const body = await req.json().catch(() => null)
     const actionId: string | undefined = body?.actionId
-    const confirmed: boolean = body?.confirmed === true
+    const confirmed = body?.confirmed === true
+    if (!actionId) return NextResponse.json({ error: 'actionId é obrigatório' }, { status: 400 })
 
-    if (!actionId) {
-      return NextResponse.json({ error: 'actionId é obrigatório' }, { status: 400 })
-    }
-
-    // Ownership via RLS — só retorna se pertencer ao usuário logado
-    const { data: action, error: fetchError } = await authClient
+    const { data: action } = await client
       .from('chat_pending_actions')
-      .select('id, tool_name, params, status')
+      .select('id, tool_name, params, status, created_at')
       .eq('id', actionId)
-      .single()
+      .eq('user_id', user.id)
+      .maybeSingle()
 
-    if (fetchError || !action) {
-      return NextResponse.json({ error: 'Ação não encontrada' }, { status: 404 })
-    }
+    if (!action) return NextResponse.json({ error: 'Ação não encontrada' }, { status: 404 })
+    if (action.status !== 'pending') return NextResponse.json({ error: 'Esta ação já foi resolvida' }, { status: 409 })
 
-    if (action.status !== 'pending') {
-      return NextResponse.json({ error: 'Esta ação já foi resolvida' }, { status: 409 })
-    }
-
-    if (!confirmed) {
-      await authClient
-        .from('chat_pending_actions')
-        .update({ status: 'declined', resolved_at: new Date().toISOString() })
-        .eq('id', actionId)
-
-      return NextResponse.json({ success: true, message: 'Ação cancelada.' })
-    }
-
-    // Executa de fato — único lugar do sistema que grava dados vindos do chat
-    const result = await executeAction(
-      authClient, user.id, action.tool_name as ChatToolName, action.params
-    )
-
-    await authClient
+    // Marca como resolvida ANTES de executar: dois toques rápidos não gravam duas vezes.
+    const { data: claimed } = await client
       .from('chat_pending_actions')
-      .update({
-        status:      result.success ? 'confirmed' : 'failed',
-        result_note: result.message,
-        resolved_at: new Date().toISOString(),
-      })
+      .update({ status: confirmed ? 'confirmed' : 'declined', resolved_at: new Date().toISOString() })
       .eq('id', actionId)
+      .eq('status', 'pending')
+      .select('id')
+    if (!claimed?.length) return NextResponse.json({ error: 'Esta ação já foi resolvida' }, { status: 409 })
 
-    // Registra o resultado no histórico da conversa também
-    await authClient.from('chat_messages').insert({
-      user_id: user.id, role: 'assistant', content: result.message,
-    })
+    if (!confirmed) return NextResponse.json({ success: true, message: 'Ok, deixei como estava.', refresh: [] })
 
-    return NextResponse.json({ success: result.success, message: result.message })
+    const params = (action.params ?? {}) as { payload?: unknown; today?: string; dow?: number }
+    const expired = Date.now() - new Date(action.created_at).getTime() > PROPOSAL_TTL_MS
+    const date = params.today && Number.isInteger(params.dow) ? { today: params.today, dow: params.dow! } : saoPauloToday()
 
+    let result: { success: boolean; message: string; refresh: string[] }
+    if (expired) {
+      result = { success: false, message: 'Essa proposta expirou. Peça de novo e eu recalculo.', refresh: [] }
+    } else {
+      try {
+        result = await executeProposal(action.tool_name, params.payload ?? {}, { client, userId: user.id, ...date } satisfies CoachCtx)
+      } catch (e) {
+        console.error('[confirm] execute failed', e)
+        result = { success: false, message: 'Não consegui aplicar agora. Peça de novo em instantes.', refresh: [] }
+      }
+    }
+
+    await client
+      .from('chat_pending_actions')
+      .update({ status: result.success ? 'confirmed' : 'failed', result_note: result.message })
+      .eq('id', actionId)
+    await client.from('chat_messages').insert({ user_id: user.id, role: 'assistant', content: result.message })
+
+    return NextResponse.json(result)
   } catch (err) {
     console.error('[POST /api/chat/confirm]', err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Erro interno' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Não consegui processar essa ação agora.' }, { status: 500 })
   }
 }
