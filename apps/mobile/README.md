@@ -24,6 +24,7 @@ As regras de treino vêm do pacote `@thaix/core` (`packages/core`), o mesmo que 
    ```
 
 4. Leia o QR code com a câmera (iPhone) ou com o Expo Go (Android).
+   O app é só iOS e Android: não aperte `w` nem abra o `localhost:8081` no navegador.
    O celular e o PC precisam estar na mesma rede Wi-Fi. Se não conectar, use `npx expo start --tunnel`.
 
 ## Comandos úteis
