@@ -82,7 +82,13 @@ function RoutineForm({ answers }: { answers: OnboardingAnswers | null }) {
               key={id}
               label={SKILLS[id].name}
               emoji={SKILLS[id].icon}
-              sublabel={id === 'hspu' ? 'Puxadas saem dos dias de treino (HSPU não combina com elas)' : undefined}
+              sublabel={
+                id === 'hspu'
+                  ? 'As puxadas saem dos dias de treino (HSPU não combina com elas)'
+                  : id === 't2b'
+                    ? undefined
+                    : 'As outras puxadas e o HSPU saem dos dias de treino'
+              }
               selected={focus === id}
               onPress={() => setFocus(id)}
             />

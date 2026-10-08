@@ -19,9 +19,18 @@ export type ClaudeResponse = {
 // bloco inteiro de ferramentas entra no cache junto com o prompt fixo.
 const TOOLS = toolsForApi().map((t, i, all) => (i === all.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t))
 
-export async function callClaude(staticPrompt: string, dynamicPrompt: string, messages: Message[]): Promise<ClaudeResponse> {
+/**
+ * @param allowTools false na última rodada: o modelo precisa responder em texto
+ *   (as definições continuam presentes porque o histórico tem blocos de ferramenta).
+ */
+export async function callClaude(
+  staticPrompt: string,
+  dynamicPrompt: string,
+  messages: Message[],
+  { allowTools = true, timeoutMs = 25_000 }: { allowTools?: boolean; timeoutMs?: number } = {},
+): Promise<ClaudeResponse> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 45_000)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -39,6 +48,7 @@ export async function callClaude(staticPrompt: string, dynamicPrompt: string, me
           { type: 'text', text: dynamicPrompt },
         ],
         tools: TOOLS,
+        ...(allowTools ? {} : { tool_choice: { type: 'none' } }),
         messages,
       }),
     })

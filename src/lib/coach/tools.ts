@@ -1,4 +1,6 @@
 import {
+  BOX_KINDS,
+  BOX_STIMULI,
   EQUIPMENT_OPTIONS,
   EXERCISE_EFFORT_LABELS,
   MIN_TRAINING_DAYS,
@@ -376,6 +378,7 @@ export async function buildProposal(name: CoachToolName, input: Json, ctx: Coach
       if (!snap.skills.some(s => s.skill_id === id)) return { error: `${skillName(id)} não está nas trilhas do aluno. Use add_skill antes.` }
       const preview = [`${skillName(id)} entra em todos os seus dias de treino.`]
       if (id === 'hspu') preview.push('Como HSPU não combina com puxada, as skills de puxada saem dos dias de treino enquanto o foco for HSPU.')
+      if (['pull-up', 'c2b', 'bmu'].includes(id)) preview.push('As outras skills de puxada e o HSPU saem dos dias de treino enquanto este for o foco.')
       return { summary: `Priorizar ${skillName(id)}`, preview, payload: { skill_id: id } }
     }
 
@@ -404,8 +407,9 @@ export async function buildProposal(name: CoachToolName, input: Json, ctx: Coach
     case 'log_box_session': {
       const intensity = Math.round(Number(input.intensity))
       if (!(intensity >= 1 && intensity <= 5)) return { error: 'Intensidade de 1 a 5.' }
+      if (!(BOX_KINDS as readonly string[]).includes(String(input.kind))) return { error: `Tipo de treino inválido. Use: ${BOX_KINDS.join(', ')}.` }
       const date = typeof input.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.date) ? input.date : ctx.today
-      const stimulus = Array.isArray(input.stimulus) ? (input.stimulus as string[]) : []
+      const stimulus = Array.isArray(input.stimulus) ? (input.stimulus as string[]).filter(x => (BOX_STIMULI as readonly string[]).includes(x)) : []
       return {
         summary: 'Registrar treino da box',
         preview: [
@@ -425,7 +429,8 @@ export async function buildProposal(name: CoachToolName, input: Json, ctx: Coach
     }
 
     case 'resolve_limitation': {
-      const area = String(input.body_area ?? '').trim()
+      const area = String(input.body_area ?? '').trim().replace(/[%_\\]/g, '')
+      if (area.length < 2) return { error: 'Informe a região.' }
       const { data } = await ctx.client.from('student_limitations').select('id, body_area').eq('user_id', ctx.userId).eq('active', true).ilike('body_area', `%${area}%`)
       if (!data?.length) return { error: `Nenhuma limitação ativa em "${area}".` }
       return { summary: `Marcar ${data[0].body_area} como resolvido`, preview: ['Que bom que melhorou!'], payload: { ids: data.map((d: any) => d.id) } }
@@ -485,18 +490,17 @@ async function applyWorkoutOps(ctx: CoachCtx, payload: any): Promise<ExecResult>
     expected.every(e => w.items.some(i => i.order_index === e.order_index && i.skill_exercise_id === e.skill_exercise_id && i.sets === e.sets))
   if (!same) return fail('O treino mudou desde a proposta. Peça o ajuste de novo para eu recalcular.')
 
+  // Aplicação atômica e validada no banco (RPC): só reduz séries, troca por
+  // exercício da mesma skill/categoria e marca o treino como ajustado.
   const ops = payload.ops as WorkoutOp[]
-  for (const op of ops) {
-    const base = ctx.client.from('daily_workout_items')
-    let res
-    if (op.type === 'remove') res = await base.delete().eq('daily_workout_id', w.id).eq('order_index', op.order_index)
-    else if (op.type === 'set_sets') res = await base.update({ sets: op.sets }).eq('daily_workout_id', w.id).eq('order_index', op.order_index)
-    else res = await base.update({ skill_exercise_id: op.skill_exercise_id, sets: op.sets, reps: op.reps, time_sec: op.time_sec }).eq('daily_workout_id', w.id).eq('order_index', op.order_index)
-    if (res.error) return fail(`Não consegui ajustar o treino: ${res.error.message}`)
-  }
+  const { error } = await ctx.client.rpc('coach_apply_workout_ops', { p_workout_id: w.id, p_ops: ops })
+  if (error) return fail(`Não consegui ajustar o treino: ${error.message}`)
 
   const after = applyOps(w.items, ops, payload.new_exercise ? { [payload.new_exercise.id]: payload.new_exercise } : {})
-  return ok(`Treino ajustado: ${after.length} exercícios, cerca de ${estimateWorkoutMinutes(after)} min. Bora! 💪`, ['today', 'workout'])
+  return ok(
+    `Treino ajustado: ${after.length} exercícios, cerca de ${estimateWorkoutMinutes(after)} min. Como é um treino ajustado, ele conta para a sequência mas não para subir de nível. Bora! 💪`,
+    ['today', 'workout'],
+  )
 }
 
 export async function executeProposal(name: string, payload: any, ctx: CoachCtx): Promise<ExecResult> {
@@ -508,17 +512,26 @@ export async function executeProposal(name: string, payload: any, ctx: CoachCtx)
       return applyWorkoutOps(ctx, payload)
 
     case 'update_routine': {
-      const { error } = await c.from('onboarding_responses').update(payload.patch).eq('user_id', ctx.userId)
+      // Só as colunas da rotina, mesmo que o payload tenha sido alterado.
+      const raw = (payload.patch ?? {}) as Record<string, unknown>
+      const patch: Record<string, unknown> = {}
+      for (const k of ['dias_semana', 'frequencia', 'session_minutes', 'equipment']) if (k in raw) patch[k] = raw[k]
+      if (Object.keys(patch).length === 0) return fail('Nada para atualizar.')
+      const { error } = await c.from('onboarding_responses').update(patch).eq('user_id', ctx.userId)
       return error ? fail(`Não consegui salvar a rotina: ${error.message}`) : ok('Rotina atualizada. O próximo treino já sai assim.', ['routine', 'today'])
     }
 
     case 'set_focus_skill': {
+      if (payload.skill_id !== null && !isSkillId(String(payload.skill_id))) return fail('Skill inválida.')
       const { error } = await c.from('onboarding_responses').update({ focus_skill_id: payload.skill_id }).eq('user_id', ctx.userId)
       if (error) return fail(`Não consegui salvar o foco: ${error.message}`)
       return ok(payload.skill_id ? `Foco em ${skillName(payload.skill_id)} definido! 🎯` : 'Foco removido.', ['routine'])
     }
 
     case 'add_skill': {
+      if (!isSkillId(String(payload.skill_id))) return fail('Skill inválida.')
+      const { data: ob0 } = await c.from('onboarding_responses').select('pushups, pullups').eq('user_id', ctx.userId).maybeSingle()
+      payload.level = initialSkillLevel(ob0?.pushups ?? 0, ob0?.pullups ?? 0)
       const { error } = await c.from('user_skill_progress').insert({
         user_id: ctx.userId,
         skill_id: payload.skill_id,
@@ -536,22 +549,42 @@ export async function executeProposal(name: string, payload: any, ctx: CoachCtx)
     }
 
     case 'set_goal': {
-      const { error } = await c.from('student_goals').insert({ user_id: ctx.userId, ...payload })
+      const { error } = await c.from('student_goals').insert({
+        user_id: ctx.userId,
+        description: String(payload.description ?? '').slice(0, 200),
+        target_date: payload.target_date ?? null,
+        skill_id: payload.skill_id ?? null,
+      })
       return error ? fail(`Não consegui salvar o objetivo: ${error.message}`) : ok('Objetivo registrado. Vou acompanhar com você! 🎯', [])
     }
 
     case 'log_box_session': {
-      const { error } = await c.from('box_sessions').insert({ user_id: ctx.userId, ...payload })
+      const { error } = await c.from('box_sessions').insert({
+        user_id: ctx.userId,
+        date: payload.date,
+        kind: payload.kind,
+        intensity: payload.intensity,
+        stimulus: payload.stimulus,
+        notes: payload.notes ?? null,
+      })
       return error ? fail(`Não consegui registrar o treino da box: ${error.message}`) : ok('Treino da box registrado.', [])
     }
 
     case 'register_limitation': {
-      const { error } = await c.from('student_limitations').insert({ user_id: ctx.userId, ...payload })
+      const { error } = await c.from('student_limitations').insert({
+        user_id: ctx.userId,
+        body_area: String(payload.body_area ?? '').slice(0, 60),
+        description: String(payload.description ?? '').slice(0, 200),
+      })
       return error ? fail(`Não consegui registrar: ${error.message}`) : ok('Registrado. Se persistir, procure um fisioterapeuta.', [])
     }
 
     case 'resolve_limitation': {
-      const { error } = await c.from('student_limitations').update({ active: false, resolved_at: new Date().toISOString() }).in('id', payload.ids)
+      const { error } = await c
+        .from('student_limitations')
+        .update({ active: false, resolved_at: new Date().toISOString() })
+        .eq('user_id', ctx.userId)
+        .in('id', Array.isArray(payload.ids) ? payload.ids : [])
       return error ? fail(`Não consegui atualizar: ${error.message}`) : ok('Marcado como resolvido. 🙌', [])
     }
 
@@ -561,15 +594,20 @@ export async function executeProposal(name: string, payload: any, ctx: CoachCtx)
     }
 
     case 'register_daily_effort': {
-      const { error } = await c.from('daily_pain_logs').upsert({ user_id: ctx.userId, date: ctx.today, pain_score: payload.score }, { onConflict: 'user_id,date' })
+      const score = Math.round(Number(payload.score))
+      if (!(score >= 0 && score <= 10)) return fail('Esforço de 0 a 10.')
+      const { error } = await c.from('daily_pain_logs').upsert({ user_id: ctx.userId, date: ctx.today, pain_score: score }, { onConflict: 'user_id,date' })
       return error ? fail(`Não consegui registrar o esforço: ${error.message}`) : ok(`Esforço do dia registrado: ${payload.score}/10.`, ['home', 'progress'])
     }
 
     case 'update_weight': {
-      const [{ error }] = await Promise.all([
-        c.from('profiles').update({ weight_kg: payload.weight_kg }).eq('user_id', ctx.userId),
-        c.from('weight_logs').upsert({ user_id: ctx.userId, date: ctx.today, weight_kg: payload.weight_kg }, { onConflict: 'user_id,date' }),
+      const kg = Number(payload.weight_kg)
+      if (!(kg >= 25 && kg <= 300)) return fail('Esse peso não parece correto.')
+      const results = await Promise.all([
+        c.from('profiles').update({ weight_kg: kg }).eq('user_id', ctx.userId),
+        c.from('weight_logs').upsert({ user_id: ctx.userId, date: ctx.today, weight_kg: kg }, { onConflict: 'user_id,date' }),
       ])
+      const error = results.find(r => r.error)?.error
       return error ? fail(`Não consegui atualizar o peso: ${error.message}`) : ok(`Peso atualizado para ${payload.weight_kg} kg.`, ['account'])
     }
 

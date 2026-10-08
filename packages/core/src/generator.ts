@@ -77,26 +77,23 @@ export const MUSCLE_GROUPS: Record<string, 'A' | 'B' | 'C'> = {
 export function selectSkillsForToday(allSkills: string[], dayIndex: number, focusSkill?: string | null): string[] {
   const focus = focusSkill && allSkills.includes(focusSkill) ? focusSkill : null
 
-  if (allSkills.length <= 2) {
-    // HSPU + puxada não combinam: com foco, fica só o foco e o que combina com ele.
-    if (focus && MUSCLE_GROUPS[focus] === 'B') return allSkills.filter(s => s === focus || MUSCLE_GROUPS[s] === 'C')
-    return allSkills
-  }
-
   const groupA = allSkills.filter(s => MUSCLE_GROUPS[s] === 'A')
   const groupB = allSkills.filter(s => MUSCLE_GROUPS[s] === 'B')
   const groupC = allSkills.filter(s => MUSCLE_GROUPS[s] === 'C')
 
+  // Com foco, a combinação parte da skill prioritária (vale para qualquer
+  // quantidade de skills, inclusive 2: puxada + HSPU nunca saem juntas).
   if (focus) {
     const group = MUSCLE_GROUPS[focus]
     const partnerC = groupC.length > 0 ? groupC[dayIndex % groupC.length] : null
-    if (group === 'A') return partnerC ? [focus, partnerC] : [focus]
-    if (group === 'B') return partnerC ? [focus, partnerC] : [focus]
+    if (group === 'A' || group === 'B') return partnerC ? [focus, partnerC] : [focus]
     if (group === 'C') {
-      const a = groupA.length > 0 ? groupA[dayIndex % groupA.length] : groupB[0]
-      return a ? [a, focus] : [focus]
+      const other = groupA.length > 0 ? groupA[dayIndex % groupA.length] : groupB[0]
+      return other ? [other, focus] : [focus]
     }
   }
+
+  if (allSkills.length <= 2) return allSkills
 
   const selected: string[] = []
 

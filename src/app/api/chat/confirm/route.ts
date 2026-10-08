@@ -47,9 +47,17 @@ export async function POST(req: NextRequest) {
     const expired = Date.now() - new Date(action.created_at).getTime() > PROPOSAL_TTL_MS
     const date = params.today && Number.isInteger(params.dow) ? { today: params.today, dow: params.dow! } : saoPauloToday()
 
-    const result = expired
-      ? { success: false, message: 'Essa proposta expirou. Peça de novo e eu recalculo.', refresh: [] as string[] }
-      : await executeProposal(action.tool_name, params.payload ?? {}, { client, userId: user.id, ...date } satisfies CoachCtx)
+    let result: { success: boolean; message: string; refresh: string[] }
+    if (expired) {
+      result = { success: false, message: 'Essa proposta expirou. Peça de novo e eu recalculo.', refresh: [] }
+    } else {
+      try {
+        result = await executeProposal(action.tool_name, params.payload ?? {}, { client, userId: user.id, ...date } satisfies CoachCtx)
+      } catch (e) {
+        console.error('[confirm] execute failed', e)
+        result = { success: false, message: 'Não consegui aplicar agora. Peça de novo em instantes.', refresh: [] }
+      }
+    }
 
     await client
       .from('chat_pending_actions')

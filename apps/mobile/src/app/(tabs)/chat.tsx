@@ -47,7 +47,7 @@ function keysToRefresh(userId: string, refresh: string[]) {
 
 type Row = { kind: 'msg'; msg: ChatMessage } | { kind: 'action'; action: PendingAction } | { kind: 'typing' };
 
-type ChatResponse = { message?: string; pendingActions?: { id: string; toolName: string; summary: string; preview?: string[] }[] };
+type ChatResponse = { message?: string };
 
 export default function ChatScreen() {
   const c = useTheme();
@@ -55,61 +55,54 @@ export default function ChatScreen() {
   const client = useQueryClient();
   const history = useChatHistory(userId);
 
+  // Mensagens só locais: a do aluno enquanto o coach responde e avisos de erro.
   const [local, setLocal] = useState<ChatMessage[]>([]);
-  const [actions, setActions] = useState<PendingAction[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const counter = useRef(0);
 
   const nextId = (prefix: string) => `${prefix}-${++counter.current}`;
-  const messages = useMemo(() => [...(history.data ?? []), ...local], [history.data, local]);
+  const messages = useMemo(() => [...(history.data?.messages ?? []), ...local], [history.data, local]);
 
   // Lista invertida: o item 0 fica embaixo, perto do campo de texto.
   const rows: Row[] = useMemo(() => {
     const list: Row[] = [
       ...messages.map((msg) => ({ kind: 'msg' as const, msg })),
-      ...actions.filter((a) => a.status === 'pending').map((action) => ({ kind: 'action' as const, action })),
+      ...(history.data?.pending ?? []).map((action) => ({ kind: 'action' as const, action })),
     ];
     if (sending) list.push({ kind: 'typing' });
     return list.reverse();
-  }, [messages, actions, sending]);
-
-  function pushAssistant(content: string) {
-    setLocal((prev) => [...prev, { id: nextId('a'), role: 'assistant', content }]);
-  }
+  }, [messages, history.data, sending]);
 
   async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
     tapFeedback();
-    setLocal((prev) => [...prev, { id: nextId('u'), role: 'user', content: trimmed }]);
+    setLocal([{ id: nextId('u'), role: 'user', content: trimmed }]);
     setInput('');
     setSending(true);
+    let errorNote: string | null = null;
     try {
       // A data do aparelho: o servidor roda em UTC e "hoje" precisa ser o do aluno.
-      const res = await apiPost<ChatResponse>('/api/chat', { message: trimmed, today: toLocalISODate(), dow: new Date().getDay() }, 60_000);
-      if (res.message) pushAssistant(res.message);
-      if (res.pendingActions?.length) {
-        setActions((prev) => [...prev, ...res.pendingActions!.map((a) => ({ ...a, preview: a.preview ?? [], status: 'pending' as const }))]);
-      }
+      await apiPost<ChatResponse>('/api/chat', { message: trimmed, today: toLocalISODate(), dow: new Date().getDay() }, 70_000);
     } catch (e) {
-      pushAssistant(e instanceof Error && e.message ? e.message : 'Não consegui responder agora. Tenta de novo?');
-    } finally {
-      setSending(false);
+      errorNote = e instanceof Error && e.message ? e.message : 'Não consegui responder agora. Tenta de novo?';
     }
+    // O servidor é a fonte da verdade (resposta, propostas e a própria mensagem).
+    await history.refetch();
+    setLocal(errorNote ? [{ id: nextId('e'), role: 'assistant', content: errorNote }] : []);
+    setSending(false);
   }
 
   async function resolve(id: string, confirmed: boolean) {
     try {
       const res = await apiPost<{ success?: boolean; message?: string; refresh?: string[] }>('/api/chat/confirm', { actionId: id, confirmed });
-      setActions((prev) => prev.map((a) => (a.id === id ? { ...a, status: confirmed ? 'confirmed' : 'declined' } : a)));
-      if (res.message) pushAssistant(res.message);
       // O que a ação mudou aparece na hora nas outras telas.
       for (const key of keysToRefresh(userId, res.refresh ?? [])) client.invalidateQueries({ queryKey: key });
     } catch (e) {
-      setActions((prev) => prev.map((a) => (a.id === id ? { ...a, status: 'declined' } : a)));
-      pushAssistant(e instanceof Error && e.message ? e.message : 'Não consegui processar essa ação. Tenta de novo?');
+      setLocal((prev) => [...prev, { id: nextId('e'), role: 'assistant', content: e instanceof Error && e.message ? e.message : 'Não consegui processar essa ação.' }]);
     }
+    await history.refetch();
   }
 
   const empty = !history.isPending && messages.length === 0;

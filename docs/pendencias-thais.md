@@ -20,6 +20,14 @@ Pontos de regra de treino que o código já implementa de algum jeito, mas que p
 - **Equivalências de exercícios:** trocas válidas por nível e equipamento (ex.: sem barra, sem paralela).
 - **Base de conhecimento do coach:** execução, erros comuns e progressões de cada exercício, no tom dela.
 
+## Coach (fase 2)
+
+- **Equipamento por exercício:** preencher `skill_exercises.equipment` (barra, paralelas, argolas, caixa, chao). Sem isso, o filtro por equipamento e as trocas "não tenho barra" não têm efeito.
+- **Base de conhecimento:** textos curtos por exercício em `coach_knowledge` (execução, erros comuns, escala, progressão). É o que o coach cita quando o aluno pergunta "como faço X".
+- **Treino ajustado não conta para subir de nível** (encurtado ou aliviado pelo coach). Ela concorda?
+- **Ordem de corte por tempo:** mobilidade → core → força, preservando a skill; séries da skill no mínimo 2.
+- **Depois de WOD pesado com puxada:** o coach propõe tirar a força acessória das skills de puxada e uma série de cada exercício.
+
 ## Coach proativo
 
 - Alerta de esforço alto por 3 dias seguidos: o que ela recomenda nesse caso?

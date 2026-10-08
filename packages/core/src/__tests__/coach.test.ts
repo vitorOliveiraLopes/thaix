@@ -50,6 +50,10 @@ describe('foco e equipamento no gerador', () => {
     expect(selectSkillsForToday(['pull-up', 'hspu'], 1, 'hspu')).toEqual(['hspu'])
   })
 
+  it('foco em puxada com HSPU também não junta os dois', () => {
+    expect(selectSkillsForToday(['pull-up', 'hspu'], 2, 'pull-up')).toEqual(['pull-up'])
+  })
+
   it('foco desconhecido é ignorado', () => {
     expect(selectSkillsForToday(['pull-up', 'c2b', 't2b'], 0, 'bmu')).toEqual(selectSkillsForToday(['pull-up', 'c2b', 't2b'], 0))
   })
