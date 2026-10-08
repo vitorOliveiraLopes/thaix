@@ -4,7 +4,7 @@ import { qk } from './query';
 import { supabase } from './supabase';
 
 export type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string };
-export type PendingAction = { id: string; toolName: string; summary: string; status: 'pending' | 'confirmed' | 'declined' };
+export type PendingAction = { id: string; toolName: string; summary: string; preview: string[]; status: 'pending' | 'confirmed' | 'declined' };
 
 export function useChatHistory(userId: string) {
   return useQuery({

@@ -24,12 +24,14 @@ export type OnboardingAnswers = {
   dias_semana: number[] | null;
   session_minutes: number | null;
   equipment: string[] | null;
+  focus_skill_id?: string | null;
   protocol_recommended: string | null;
   current_step: string | null;
 };
 
-const ANSWERS_SELECT =
-  'motivacao, objetivo, skills, trava, pushups, pullups, squats, frequencia, dias_semana, session_minutes, equipment, protocol_recommended, current_step';
+// '*' em vez de lista: colunas novas (ex.: focus_skill_id) não quebram a leitura
+// enquanto o SQL correspondente ainda não rodou no Supabase.
+const ANSWERS_SELECT = '*';
 
 async function fetchAnswers(userId: string): Promise<OnboardingAnswers | null> {
   const { data, error } = await supabase.from('onboarding_responses').select(ANSWERS_SELECT).eq('user_id', userId).maybeSingle();

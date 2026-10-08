@@ -1,5 +1,8 @@
 import {
+  applyOps,
   buildAdaptiveProfile,
+  filterByEquipment,
+  fitWorkoutToMinutes,
   selectExercisesFromPool,
   selectSkillsForToday,
   toLocalISODate,
@@ -151,6 +154,16 @@ async function doGenerate(userId: string, today: string): Promise<Workout[]> {
   if (error) throw new Error(error.message);
   if (!progress || progress.length === 0) return existing;
 
+  // Rotina do aluno: tempo por sessão, equipamento e skill prioritária.
+  const { data: routine } = await supabase
+    .from('onboarding_responses')
+    .select('session_minutes, equipment, focus_skill_id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  const sessionMinutes = (routine?.session_minutes as number | null) ?? null;
+  const equipment = (routine?.equipment as string[] | null) ?? [];
+  const focus = (routine?.focus_skill_id as string | null) ?? null;
+
   // Com treino já criado hoje, só completa as skills dele; senão escolhe as do dia.
   const skillsToday =
     existing.length > 0
@@ -158,7 +171,10 @@ async function doGenerate(userId: string, today: string): Promise<Workout[]> {
       : selectSkillsForToday(
           progress.map((p) => p.skill_id as string),
           new Date().getDay(),
+          focus,
         );
+  // O tempo da sessão é dividido entre as skills do dia.
+  const minutesPerSkill = sessionMinutes ? Math.max(10, Math.round(sessionMinutes / Math.max(1, skillsToday.length))) : null;
 
   for (const skillId of skillsToday) {
     const p = progress.find((x) => x.skill_id === skillId);
@@ -173,14 +189,30 @@ async function doGenerate(userId: string, today: string): Promise<Workout[]> {
     if (poolError) throw new Error(poolError.message);
 
     const weekNumber = current?.week_number ?? p.week_number;
-    const exercises = selectExercisesFromPool({
-      pool: (pool ?? []) as SkillExercise[],
+    // Só o que dá para fazer com o equipamento do aluno. Sem nada compatível,
+    // cai no pool completo (melhor treinar com escala do que não treinar).
+    const fullPool = (pool ?? []) as SkillExercise[];
+    const usable = filterByEquipment(fullPool, equipment);
+    const selected = selectExercisesFromPool({
+      pool: usable.length > 0 ? usable : fullPool,
       level: p.level,
       weekNumber,
       seed: workoutSeed(userId, today, weekNumber),
       profile,
     });
-    if (exercises.length === 0) continue;
+    if (selected.length === 0) continue;
+
+    // Encaixa no tempo disponível (corta mobilidade/core/força antes da skill).
+    const asItems = selected.map((e, i) => ({
+      order_index: i + 1,
+      skill_exercise_id: e.id,
+      sets: e.sets,
+      reps: e.reps,
+      time_sec: e.time_sec,
+      exercise: e,
+    }));
+    const fitted = minutesPerSkill ? applyOps(asItems, fitWorkoutToMinutes(asItems, minutesPerSkill).ops) : asItems;
+    const exercises = fitted.map((it) => ({ ...(it.exercise as SkillExercise), sets: it.sets, reps: it.reps, time_sec: it.time_sec }));
 
     let headerId = current?.id;
     if (!headerId) {

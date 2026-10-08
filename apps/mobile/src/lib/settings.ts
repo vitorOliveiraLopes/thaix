@@ -28,7 +28,7 @@ export function useUpdateSettings(userId: string) {
 export function useUpdateRoutine(userId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (patch: { dias_semana: number[]; session_minutes: number; equipment: string[] }) => {
+    mutationFn: async (patch: { dias_semana: number[]; session_minutes: number; equipment: string[]; focus_skill_id: string | null }) => {
       const { error } = await supabase
         .from('onboarding_responses')
         .update({ ...patch, frequencia: patch.dias_semana.length })

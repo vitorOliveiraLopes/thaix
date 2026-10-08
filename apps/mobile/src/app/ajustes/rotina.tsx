@@ -1,4 +1,4 @@
-import { EQUIPMENT_OPTIONS, MIN_TRAINING_DAYS, SESSION_MINUTES_OPTIONS, WEEKDAY_SHORT } from '@thaix/core';
+import { EQUIPMENT_OPTIONS, MIN_TRAINING_DAYS, SESSION_MINUTES_OPTIONS, SKILLS, WEEKDAY_SHORT, isSkillId } from '@thaix/core';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -16,6 +16,8 @@ function RoutineForm({ answers }: { answers: OnboardingAnswers | null }) {
   const [days, setDays] = useState<number[]>(() => answers?.dias_semana ?? [1, 3, 5]);
   const [minutes, setMinutes] = useState<number>(() => answers?.session_minutes ?? 45);
   const [equipment, setEquipment] = useState<string[]>(() => answers?.equipment ?? []);
+  const [focus, setFocus] = useState<string | null>(() => answers?.focus_skill_id ?? null);
+  const mySkills = (answers?.skills ?? []).filter(isSkillId);
 
   function toggleDay(d: number) {
     setDays((prev) => {
@@ -39,7 +41,7 @@ function RoutineForm({ answers }: { answers: OnboardingAnswers | null }) {
             loading={update.isPending}
             onPress={() =>
               update.mutate(
-                { dias_semana: [...days].sort((a, b) => a - b), session_minutes: minutes, equipment },
+                { dias_semana: [...days].sort((a, b) => a - b), session_minutes: minutes, equipment, focus_skill_id: focus },
                 { onSuccess: () => router.back() },
               )
             }
@@ -67,6 +69,26 @@ function RoutineForm({ answers }: { answers: OnboardingAnswers | null }) {
           ))}
         </View>
       </Card>
+
+      {mySkills.length > 1 && (
+        <View style={{ gap: spacing.sm }}>
+          <SectionLabel>Skill prioritária</SectionLabel>
+          <Txt variant="small" color="muted">
+            A skill prioritária entra em todos os seus dias de treino.
+          </Txt>
+          <OptionRow label="Sem prioridade" sublabel="As skills se revezam" selected={focus === null} onPress={() => setFocus(null)} />
+          {mySkills.map((id) => (
+            <OptionRow
+              key={id}
+              label={SKILLS[id].name}
+              emoji={SKILLS[id].icon}
+              sublabel={id === 'hspu' ? 'Puxadas saem dos dias de treino (HSPU não combina com elas)' : undefined}
+              selected={focus === id}
+              onPress={() => setFocus(id)}
+            />
+          ))}
+        </View>
+      )}
 
       <View style={{ gap: spacing.sm }}>
         <SectionLabel>Equipamento disponível</SectionLabel>
