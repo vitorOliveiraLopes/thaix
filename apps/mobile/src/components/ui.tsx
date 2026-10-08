@@ -194,7 +194,9 @@ export function Button({
       ) : (
         <View style={styles.row}>
           {icon && <Ionicons name={icon} size={18} color={palette.fg} />}
-          <Text style={[font.subheading, { color: palette.fg, fontSize: size === 'sm' ? 14 : 16 }]}>{label}</Text>
+          <Text numberOfLines={1} style={[font.subheading, { color: palette.fg, fontSize: size === 'sm' ? 14 : 16 }]}>
+            {label}
+          </Text>
           {iconRight && <Ionicons name={iconRight} size={18} color={palette.fg} />}
         </View>
       )}

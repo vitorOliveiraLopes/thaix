@@ -8,8 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Card, Txt, tapFeedback, type IconName } from '@/components/ui';
 import { useUserId } from '@/lib/account';
 import { apiPost } from '@/lib/api';
-import { useChatHistory, type ChatMessage, type PendingAction } from '@/lib/chat';
-import { toLocalISODate } from '@thaix/core';
+import { useChatHistory, type ChatAction, type ChatEntry, type ChatMessage } from '@/lib/chat';
+import { toLocalISODate, type ActionState } from '@thaix/core';
 import { qk } from '@/lib/query';
 import { radius, spacing, useTheme } from '@/theme';
 
@@ -37,7 +37,8 @@ function keysToRefresh(userId: string, refresh: string[]) {
   return keys;
 }
 
-type Row = { kind: 'msg'; msg: ChatMessage } | { kind: 'action'; action: PendingAction } | { kind: 'typing' };
+type LocalMessage = Omit<ChatMessage, 'created_at'>;
+type Row = ChatEntry | { kind: 'local'; msg: LocalMessage } | { kind: 'typing' };
 
 type ChatResponse = { message?: string };
 
@@ -48,23 +49,19 @@ export default function ChatScreen() {
   const history = useChatHistory(userId);
 
   // Mensagens só locais: a do aluno enquanto o coach responde e avisos de erro.
-  const [local, setLocal] = useState<ChatMessage[]>([]);
+  const [local, setLocal] = useState<LocalMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const counter = useRef(0);
 
   const nextId = (prefix: string) => `${prefix}-${++counter.current}`;
-  const messages = useMemo(() => [...(history.data?.messages ?? []), ...local], [history.data, local]);
-
   // Lista invertida: o item 0 fica embaixo, perto do campo de texto.
+  // Propostas ficam no ponto da conversa em que surgiram, com a decisão.
   const rows: Row[] = useMemo(() => {
-    const list: Row[] = [
-      ...messages.map((msg) => ({ kind: 'msg' as const, msg })),
-      ...(history.data?.pending ?? []).map((action) => ({ kind: 'action' as const, action })),
-    ];
+    const list: Row[] = [...(history.data?.entries ?? []), ...local.map((msg) => ({ kind: 'local' as const, msg }))];
     if (sending) list.push({ kind: 'typing' });
     return list.reverse();
-  }, [messages, history.data, sending]);
+  }, [history.data, local, sending]);
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -86,18 +83,22 @@ export default function ChatScreen() {
     setSending(false);
   }
 
-  async function resolve(id: string, confirmed: boolean) {
+  /** Devolve uma mensagem de erro para o card, ou null se deu certo. */
+  async function resolve(id: string, confirmed: boolean): Promise<string | null> {
+    let error: string | null = null;
     try {
-      const res = await apiPost<{ success?: boolean; message?: string; refresh?: string[] }>('/api/chat/confirm', { actionId: id, confirmed });
+      const res = await apiPost<{ refresh?: string[] }>('/api/chat/confirm', { actionId: id, confirmed });
       // O que a ação mudou aparece na hora nas outras telas.
       for (const key of keysToRefresh(userId, res.refresh ?? [])) client.invalidateQueries({ queryKey: key });
     } catch (e) {
-      setLocal((prev) => [...prev, { id: nextId('e'), role: 'assistant', content: e instanceof Error && e.message ? e.message : 'Não consegui processar essa ação.' }]);
+      error = e instanceof Error && e.message ? e.message : 'Não consegui processar agora. Tenta de novo?';
     }
+    // O card passa a mostrar a decisão gravada no servidor.
     await history.refetch();
+    return error;
   }
 
-  const empty = !history.isPending && messages.length === 0;
+  const empty = !history.isPending && (history.data?.entries.length ?? 0) === 0 && local.length === 0;
 
   return (
     <SafeAreaView edges={['top']} style={[styles.flex, { backgroundColor: c.background }]}>
@@ -133,14 +134,14 @@ export default function ChatScreen() {
           <FlatList
             inverted
             data={rows}
-            keyExtractor={(r) => (r.kind === 'msg' ? r.msg.id : r.kind === 'action' ? `act-${r.action.id}` : 'typing')}
+            keyExtractor={(r) => (r.kind === 'msg' || r.kind === 'local' ? r.msg.id : r.kind === 'action' ? `act-${r.action.id}` : 'typing')}
             contentContainerStyle={styles.list}
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) =>
-              item.kind === 'msg' ? (
+              item.kind === 'msg' || item.kind === 'local' ? (
                 <Bubble msg={item.msg} />
               ) : item.kind === 'action' ? (
-                <ActionCard action={item.action} onResolve={resolve} />
+                <ActionCard action={item.action} state={item.state} onResolve={resolve} />
               ) : (
                 <View style={[styles.bubble, styles.left, { backgroundColor: c.surface, borderColor: c.border }]}>
                   <ActivityIndicator size="small" color={c.muted} />
@@ -175,7 +176,7 @@ export default function ChatScreen() {
   );
 }
 
-const Bubble = memo(function Bubble({ msg }: { msg: ChatMessage }) {
+const Bubble = memo(function Bubble({ msg }: { msg: LocalMessage }) {
   const c = useTheme();
   const mine = msg.role === 'user';
   return (
@@ -192,14 +193,72 @@ const Bubble = memo(function Bubble({ msg }: { msg: ChatMessage }) {
   );
 });
 
-function ActionCard({ action, onResolve }: { action: PendingAction; onResolve: (id: string, ok: boolean) => Promise<void> }) {
+type Resolved = Exclude<ActionState, 'pending'>;
+
+const STATE_UI: Record<Resolved, { icon: IconName; label: string; tone: 'success' | 'muted' | 'danger' | 'warning' }> = {
+  confirmed: { icon: 'checkmark-circle', label: 'Você confirmou', tone: 'success' },
+  declined: { icon: 'close-circle', label: 'Você cancelou', tone: 'muted' },
+  failed: { icon: 'alert-circle', label: 'Não foi aplicado', tone: 'danger' },
+  expired: { icon: 'time', label: 'Expirou sem resposta', tone: 'warning' },
+};
+
+/** Nota padrão quando o servidor não guardou uma. */
+const DEFAULT_NOTE: Record<Resolved, string> = {
+  confirmed: 'Feito!',
+  declined: 'Nada foi alterado.',
+  failed: 'Peça de novo ao coach.',
+  expired: 'Nada foi alterado. Se ainda quiser, é só pedir de novo.',
+};
+
+function ActionCard({
+  action,
+  state,
+  onResolve,
+}: {
+  action: ChatAction;
+  state: ActionState;
+  onResolve: (id: string, ok: boolean) => Promise<string | null>;
+}) {
   const c = useTheme();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'confirm' | 'cancel' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   async function handle(ok: boolean) {
-    setBusy(true);
-    await onResolve(action.id, ok);
-    setBusy(false);
+    tapFeedback();
+    setBusy(ok ? 'confirm' : 'cancel');
+    setError(null);
+    setError(await onResolve(action.id, ok));
+    setBusy(null);
   }
+
+  if (state !== 'pending') {
+    const ui = STATE_UI[state];
+    const tone = { success: [c.success, c.successSoft], muted: [c.muted, c.surface], danger: [c.danger, c.dangerSoft], warning: [c.warning, c.warningSoft] }[ui.tone];
+    const note = action.result_note ?? DEFAULT_NOTE[state];
+    return (
+      <View
+        accessible
+        accessibilityLabel={`${action.summary}. ${ui.label}. ${note}`}
+        style={[styles.action, styles.left, { backgroundColor: c.surface, borderColor: c.border }]}
+      >
+        <Txt variant="subheading" color={state === 'confirmed' ? undefined : 'muted'}>
+          {action.summary}
+        </Txt>
+        <View style={[styles.status, { backgroundColor: tone[1] }]}>
+          <Ionicons name={ui.icon} size={18} color={tone[0]} />
+          <View style={styles.flex}>
+            <Txt variant="small" style={{ color: tone[0], fontWeight: '600' }}>
+              {ui.label}
+            </Txt>
+            <Txt variant="small" color="muted">
+              {note}
+            </Txt>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.action, styles.left, { backgroundColor: c.primarySoft, borderColor: c.primary }]}>
       <Txt variant="subheading">{action.summary}</Txt>
@@ -210,16 +269,37 @@ function ActionCard({ action, onResolve }: { action: PendingAction; onResolve: (
               <Txt variant="small" color="primary">
                 •
               </Txt>
-              <Txt variant="small" style={{ flex: 1 }}>
+              <Txt variant="small" style={styles.flex}>
                 {line}
               </Txt>
             </View>
           ))}
         </View>
       )}
-      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-        <Button label="Confirmar" size="sm" icon="checkmark" onPress={() => handle(true)} loading={busy} style={{ flex: 1 }} />
-        <Button label="Cancelar" size="sm" variant="outline" onPress={() => handle(false)} disabled={busy} />
+      {error && (
+        <Txt variant="small" style={{ color: c.danger }}>
+          {error}
+        </Txt>
+      )}
+      <View style={styles.actionButtons}>
+        <Button
+          label="Confirmar"
+          size="sm"
+          icon="checkmark"
+          onPress={() => handle(true)}
+          loading={busy === 'confirm'}
+          disabled={busy !== null}
+          style={styles.flex}
+        />
+        <Button
+          label="Cancelar"
+          size="sm"
+          variant="outline"
+          onPress={() => handle(false)}
+          loading={busy === 'cancel'}
+          disabled={busy !== null}
+          style={styles.flex}
+        />
       </View>
     </View>
   );
@@ -233,7 +313,10 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: '85%', borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2 },
   left: { alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
   right: { alignSelf: 'flex-end', borderBottomRightRadius: 4 },
-  action: { maxWidth: '90%', borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, gap: spacing.md },
+  // Largura fixa: encolhido ao tamanho do resumo, o botão Confirmar quebrava.
+  action: { width: '90%', borderRadius: radius.lg, borderWidth: 1, padding: spacing.md, gap: spacing.md },
+  actionButtons: { flexDirection: 'row', gap: spacing.sm },
+  status: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, borderRadius: radius.md, padding: spacing.sm },
   quick: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   quickIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, padding: spacing.md, borderTopWidth: StyleSheet.hairlineWidth },

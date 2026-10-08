@@ -1,48 +1,61 @@
 import { useQuery } from '@tanstack/react-query';
+import { buildChatTimeline, type ActionDbStatus, type ActionState } from '@thaix/core';
 
 import { qk } from './query';
 import { supabase } from './supabase';
 
-export type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string };
-export type PendingAction = { id: string; toolName: string; summary: string; preview: string[] };
+export type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string; created_at: string };
+export type ChatAction = {
+  id: string;
+  toolName: string;
+  summary: string;
+  preview: string[];
+  status: ActionDbStatus;
+  result_note: string | null;
+  created_at: string;
+};
+export type ChatEntry = { kind: 'msg'; msg: ChatMessage } | { kind: 'action'; action: ChatAction; state: ActionState };
 
-/** Propostas mais velhas que isso o servidor recusa; não vale mostrar. */
-const PROPOSAL_TTL_MS = 30 * 60_000;
+const HISTORY_LIMIT = 50;
 
 /**
- * Conversa e propostas pendentes vêm do servidor: se o app fechar ou a
- * resposta demorar, nada se perde ao reabrir o chat.
+ * Conversa e propostas (com a decisão do aluno) vêm do servidor: se o app
+ * fechar ou a resposta demorar, nada se perde ao reabrir o chat.
  */
 export function useChatHistory(userId: string) {
   return useQuery({
     queryKey: qk.chat(userId),
     queryFn: async () => {
-      const since = new Date(Date.now() - PROPOSAL_TTL_MS).toISOString();
-      const [messages, pending] = await Promise.all([
-        supabase
-          .from('chat_messages')
-          .select('id, role, content')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(50),
-        supabase
-          .from('chat_pending_actions')
-          .select('id, tool_name, summary, params')
-          .eq('user_id', userId)
-          .eq('status', 'pending')
-          .gte('created_at', since)
-          .order('created_at', { ascending: true }),
-      ]);
-      if (messages.error) throw new Error(messages.error.message);
-      return {
-        messages: ((messages.data ?? []) as ChatMessage[]).reverse(),
-        pending: (pending.data ?? []).map((p) => ({
-          id: p.id as string,
-          toolName: p.tool_name as string,
-          summary: p.summary as string,
-          preview: ((p.params as { preview?: string[] } | null)?.preview ?? []) as string[],
-        })) as PendingAction[],
-      };
+      const { data: rows, error } = await supabase
+        .from('chat_messages')
+        .select('id, role, content, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(HISTORY_LIMIT);
+      if (error) throw new Error(error.message);
+      const messages = (rows ?? []) as ChatMessage[];
+
+      // Propostas do mesmo período (toda a conversa carregada).
+      const oldest = messages.length ? messages[messages.length - 1].created_at : new Date(0).toISOString();
+      const { data: acts, error: actsError } = await supabase
+        .from('chat_pending_actions')
+        .select('id, tool_name, summary, params, status, result_note, created_at')
+        .eq('user_id', userId)
+        .gte('created_at', oldest)
+        .order('created_at', { ascending: true })
+        .limit(HISTORY_LIMIT);
+      if (actsError) throw new Error(actsError.message);
+
+      const actions: ChatAction[] = (acts ?? []).map((a) => ({
+        id: a.id as string,
+        toolName: a.tool_name as string,
+        summary: a.summary as string,
+        preview: ((a.params as { preview?: string[] } | null)?.preview ?? []) as string[],
+        status: a.status as ActionDbStatus,
+        result_note: (a.result_note as string | null) ?? null,
+        created_at: a.created_at as string,
+      }));
+      return { entries: buildChatTimeline(messages, actions) as ChatEntry[], count: messages.length };
     },
   });
 }

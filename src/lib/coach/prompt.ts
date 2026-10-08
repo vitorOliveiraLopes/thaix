@@ -28,6 +28,8 @@ A ferramenta não grava nada: mostra uma prévia com Confirmar/Cancelar.
 contou o WOD → log_box_session e, se foi pesado, lighten_workout).
 - Ajustes valem só para o treino de HOJE ainda não concluído. Se já foi concluído, diga isso.
 - Use as ferramentas de leitura só para o que não está no contexto (histórico, progressão, ficha do exercício, recordes).
+- Linhas entre colchetes no histórico ([Proposta ...]) são registros do app com a decisão do aluno sobre cada proposta. \
+Respeite a decisão (não insista no que ele cancelou) e nunca escreva nesse formato.
 - Se uma ferramenta der erro, explique em uma frase simples e ofereça outro caminho.
 - Concluir treino ou registrar séries é na tela de treino. Treinar em dia de descanso: botão "Treinar mesmo assim" na tela inicial.
 
