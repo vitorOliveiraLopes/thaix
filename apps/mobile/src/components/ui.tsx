@@ -3,9 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { forwardRef, memo, type ComponentProps, type ReactNode } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -18,6 +16,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { font, levelColors, radius, spacing, useTheme } from '@/theme';
@@ -110,7 +109,7 @@ export function Screen({
   return (
     <SafeAreaView edges={edges} style={[styles.flex, { backgroundColor: c.background }]}>
       {keyboard ? (
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.flex} behavior="padding" automaticOffset>
           {body}
         </KeyboardAvoidingView>
       ) : (
@@ -483,7 +482,7 @@ export function BottomSheet({
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <Pressable style={[styles.flex, { backgroundColor: c.overlay }]} onPress={onClose} accessibilityLabel="Fechar" />
         <View style={[styles.sheet, { backgroundColor: c.background, paddingBottom: insets.bottom + spacing.lg }]}>
           <View style={[styles.grabber, { backgroundColor: c.border }]} />
