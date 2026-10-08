@@ -245,3 +245,13 @@ export function selectExercisesFromPool<T extends SkillExercise>(params: {
     time_sec: e.time_sec ? adjustTime(e.time_sec, weekNumber) : null,
   }))
 }
+
+// ─── Agenda ───────────────────────────────────────────────────────────────────
+
+/**
+ * Dia de descanso = o aluno escolheu dias de treino e hoje não é um deles.
+ * Sem dias escolhidos, todo dia é dia de treino. `dayOfWeek`: 0 = domingo.
+ */
+export function isRestDay(trainingDays: number[], dayOfWeek: number): boolean {
+  return trainingDays.length > 0 && !trainingDays.includes(dayOfWeek)
+}

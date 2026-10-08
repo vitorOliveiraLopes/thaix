@@ -11,6 +11,7 @@ import {
   normalizeLevel,
   selectExercisesFromPool,
   EMPTY_PROFILE,
+  isRestDay,
   type SkillExercise,
   type HistoryResult,
 } from '../generator'
@@ -194,5 +195,16 @@ describe('selectExercisesFromPool', () => {
   it('trata nível desconhecido como iniciante', () => {
     expect(normalizeLevel('qualquer')).toBe('iniciante')
     expect(selectExercisesFromPool({ pool: [], level: 'avancado', weekNumber: 1, seed: 1 })).toEqual([])
+  })
+})
+
+describe('isRestDay', () => {
+  it('é descanso quando hoje não está entre os dias escolhidos', () => {
+    expect(isRestDay([1, 3, 5], 2)).toBe(true)
+    expect(isRestDay([1, 3, 5], 3)).toBe(false)
+  })
+
+  it('sem dias escolhidos, nunca é descanso', () => {
+    expect(isRestDay([], 0)).toBe(false)
   })
 })
