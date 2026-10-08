@@ -19,12 +19,41 @@ import {
   swapCandidates,
   swapPlan,
   weekPlan,
+  type ChatAttachment,
   type CoachToolName,
   type PlanExercise,
   type WorkoutOp,
 } from '@thaix/core'
 
 import { daysAgo, loadSnapshot, loadTodayWorkouts, type CoachCtx, type TodayWorkout } from './context'
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Exibição: card nativo no chat, montado com os dados do banco (não do modelo)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export async function buildDisplay(name: string, input: Record<string, unknown>, ctx: CoachCtx): Promise<ChatAttachment[] | { error: string }> {
+  if (name !== 'show_today_workout') return { error: 'Card desconhecido.' }
+  const all = await loadTodayWorkouts(ctx)
+  const workouts = typeof input.skill_id === 'string' ? all.filter(w => w.skill_id === input.skill_id) : all
+  if (workouts.length === 0) {
+    return { error: all.length ? 'Não há treino dessa skill hoje.' : 'Não há treino gerado hoje (ele aparece ao abrir a tela inicial).' }
+  }
+  return workouts.map(w => ({
+    type: 'workout' as const,
+    workout_id: w.id,
+    skill_id: w.skill_id,
+    week_number: w.week_number,
+    completed: w.completed,
+    minutes: estimateWorkoutMinutes(w.items),
+    items: w.items.map(i => ({
+      name: i.exercise.exercise_name,
+      category: i.exercise.category,
+      sets: i.sets,
+      reps: i.reps,
+      time_sec: i.time_sec,
+    })),
+  }))
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Leitura: executa na hora e devolve dados ao modelo
