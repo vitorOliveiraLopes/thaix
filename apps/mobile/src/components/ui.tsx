@@ -446,11 +446,20 @@ export function Chip({ label, selected, onPress, flex }: { label: string; select
       }}
       style={[
         styles.chip,
-        flex && styles.flex,
+        // Em linhas com muitos itens (7 dias da semana) a largura é pequena:
+        // sem padding lateral o rótulo cabe inteiro.
+        flex && [styles.flex, styles.chipCompact],
         { backgroundColor: selected ? c.primary : c.surfaceMuted, borderColor: selected ? c.primary : c.surfaceMuted },
       ]}
     >
-      <Text style={[font.label, { color: selected ? c.onPrimary : c.muted, textAlign: 'center' }]}>{label}</Text>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+        style={[font.label, { color: selected ? c.onPrimary : c.muted, textAlign: 'center' }]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -551,6 +560,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   optionIcon: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  chipCompact: { paddingHorizontal: 2, minWidth: 0 },
   chip: { minHeight: 42, borderRadius: radius.md, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md },
   sheet: { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingHorizontal: spacing.lg, gap: spacing.lg },
   grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginTop: spacing.sm },
