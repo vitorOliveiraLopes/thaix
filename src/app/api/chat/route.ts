@@ -1,28 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { getRouteClient } from '@/lib/supabase/route-client'
 import { CHAT_TOOLS, buildSystemPrompt, type StudentContext, type ChatToolName } from '@/lib/chat-tools'
 import { buildActionSummary } from '@/lib/chat-actions'
 
-// ─── Cliente autenticado ──────────────────────────────────────────────────────
-
-async function createAuthClient() {
-  const cookieStore = await cookies()
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (toSet) => {
-          try {
-            toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-          } catch {}
-        },
-      },
-    }
-  )
-}
 
 // ─── Montagem do contexto do aluno ────────────────────────────────────────────
 
@@ -112,10 +92,9 @@ async function callClaude(systemPrompt: string, history: { role: string; content
 
 export async function POST(req: NextRequest) {
   try {
-    const authClient = await createAuthClient()
-    const { data: { user }, error: authError } = await authClient.auth.getUser()
+    const { client: authClient, user } = await getRouteClient(req)
 
-    if (authError || !user) {
+    if (!authClient || !user) {
       return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
     }
 

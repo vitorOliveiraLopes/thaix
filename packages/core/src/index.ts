@@ -1,2 +1,5 @@
 export * from './business-rules'
 export * from './generator'
+export * from './catalog'
+export * from './progress'
+export * from './workout-session'
