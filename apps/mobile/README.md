@@ -27,6 +27,37 @@ npx expo start
 Leia o QR code com a câmera (iPhone) ou com o Expo Go (Android). Se não conectar, use `npx expo start --tunnel`.
 O app é só iOS e Android: não aperte `w` nem abra o `localhost:8081` no navegador.
 
+## Gerar um APK para instalar no Android (EAS Build)
+
+O build roda na nuvem do Expo (plano gratuito). O `.env.local` **não** é enviado
+(está no .gitignore), então as variáveis ficam no EAS, no ambiente `preview`.
+São todas públicas (`EXPO_PUBLIC_*`), nenhum segredo vai no app.
+
+Uma vez só (CMD, dentro de `apps\mobile`):
+
+```cmd
+npx eas-cli@latest login
+npx eas-cli@latest init
+npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL --value https://SEU-PROJETO.supabase.co --visibility plaintext
+npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value SUA_CHAVE_ANON --visibility plaintext
+npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_API_URL --value https://thaix.vercel.app --visibility plaintext
+```
+
+`init` cria o projeto no expo.dev e grava o `projectId` no `app.json` (commitar essa mudança).
+
+A cada APK novo:
+
+```cmd
+npx eas-cli@latest build --platform android --profile preview
+```
+
+No fim, o terminal mostra um link e um QR code. Abra no celular, baixe o APK e
+instale (o Android pede para permitir "instalar apps desta fonte").
+
+- O APK não precisa do PC ligado nem do Expo Go: é o app de verdade.
+- Mudança só em JavaScript exige um APK novo (ou EAS Update, quando configurarmos).
+- `production` gera o pacote para a Play Store (.aab); fica para o lançamento.
+
 ## Estrutura
 
 ```
