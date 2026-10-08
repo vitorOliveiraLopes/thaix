@@ -4,6 +4,7 @@
  * Definições no formato da API de mensagens da Anthropic (tool use).
  * - kind 'read': a API executa na hora e devolve o resultado ao modelo.
  * - kind 'write': vira proposta com prévia; só grava quando o aluno confirma.
+ * - kind 'display': mostra um card nativo no chat (ex.: lista de exercícios), sem gravar nada.
  */
 
 import { BOX_KINDS, BOX_STIMULI } from './coach'
@@ -13,7 +14,7 @@ type JsonSchema = { type: 'object'; properties: Record<string, unknown>; require
 
 export type CoachTool = {
   name: string
-  kind: 'read' | 'write'
+  kind: 'read' | 'write' | 'display'
   description: string
   input_schema: JsonSchema
 }
@@ -25,6 +26,15 @@ const exerciseRef = {
 }
 
 export const COACH_TOOLS = [
+  // ─── Exibição ──────────────────────────────────────────────────────────────
+  {
+    name: 'show_today_workout',
+    kind: 'display',
+    description:
+      'Mostra ao aluno, abaixo da sua mensagem, um card com os exercícios do treino de hoje (séries, reps/tempo e botão para abrir o treino). ' +
+      'Use SEMPRE que for apresentar ou listar os exercícios de hoje, inclusive depois de um ajuste confirmado; não liste os exercícios no texto.',
+    input_schema: { type: 'object', properties: { skill_id: { ...skillId, description: 'Só o treino desta skill (opcional; padrão: todos de hoje)' } } },
+  },
   // ─── Leitura ───────────────────────────────────────────────────────────────
   {
     name: 'get_today_workout',
@@ -246,6 +256,10 @@ export function isCoachTool(name: string): name is CoachToolName {
 
 export function isWriteTool(name: string): boolean {
   return BY_NAME.get(name)?.kind === 'write'
+}
+
+export function isDisplayTool(name: string): boolean {
+  return BY_NAME.get(name)?.kind === 'display'
 }
 
 /** Formato aceito pela API (sem o campo interno `kind`). */

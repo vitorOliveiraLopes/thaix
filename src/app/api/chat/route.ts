@@ -7,8 +7,12 @@ import {
   detectHealthConcern,
   detectOffTopic,
   isCoachTool,
+  isDisplayTool,
   isWriteTool,
+  parseAttachments,
   proposalReply,
+  skillName,
+  type ChatAttachment,
   type TimelineAction,
 } from '@thaix/core'
 
@@ -16,7 +20,7 @@ import { getRouteClient } from '@/lib/supabase/route-client'
 import { callClaude, describeCoachError, type ContentBlock, type Message } from '@/lib/coach/anthropic'
 import { describeSnapshot, loadSnapshot, saoPauloToday, type CoachCtx } from '@/lib/coach/context'
 import { COACH_SYSTEM_PROMPT, INJURY_HINT } from '@/lib/coach/prompt'
-import { buildProposal, runReadTool } from '@/lib/coach/tools'
+import { buildDisplay, buildProposal, runReadTool } from '@/lib/coach/tools'
 
 // ─── Configuração ─────────────────────────────────────────────────────────────
 
@@ -51,8 +55,18 @@ function resolveDate(body: any): { today: string; dow: number } {
   return valid ? { today: body.today, dow: body.dow } : server
 }
 
-async function saveAssistant(ctx: CoachCtx, content: string) {
-  await ctx.client.from('chat_messages').insert({ user_id: ctx.userId, role: 'assistant', content })
+async function saveAssistant(ctx: CoachCtx, content: string, attachments: ChatAttachment[] = []) {
+  const row = { user_id: ctx.userId, role: 'assistant', content }
+  if (attachments.length === 0) {
+    await ctx.client.from('chat_messages').insert(row)
+    return
+  }
+  const { error } = await ctx.client.from('chat_messages').insert({ ...row, attachments })
+  // Sem a coluna (SQL ainda não rodado), a mensagem não pode se perder.
+  if (error) {
+    console.error('[coach] attachments not saved', error.message)
+    await ctx.client.from('chat_messages').insert(row)
+  }
 }
 
 // ─── POST /api/chat ───────────────────────────────────────────────────────────
@@ -106,13 +120,20 @@ export async function POST(req: NextRequest) {
     const [{ data: rows }, snapshot] = await Promise.all([
       client
         .from('chat_messages')
-        .select('id, role, content, created_at')
+        // '*': funciona antes e depois da coluna attachments existir.
+        .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(HISTORY_SIZE),
       loadSnapshot(ctx),
     ])
-    const history = (rows ?? []) as { id: string; role: 'user' | 'assistant'; content: string; created_at: string }[]
+    const history = ((rows ?? []) as { id: string; role: 'user' | 'assistant'; content: string; created_at: string; attachments?: unknown }[]).map(
+      m => {
+        // O modelo não vê o card, só um registro de que ele foi mostrado.
+        const cards = parseAttachments(m.attachments).map(a => `[Card exibido: treino de ${skillName(a.skill_id)} com ${a.items.length} exercícios]`)
+        return cards.length ? { ...m, content: `${m.content}\n${cards.join('\n')}` } : m
+      },
+    )
     // Propostas do mesmo período, com a decisão do aluno: o coach precisa
     // saber o que foi confirmado ou cancelado.
     const oldest = history.length ? history[history.length - 1].created_at : new Date().toISOString()
@@ -141,6 +162,7 @@ export async function POST(req: NextRequest) {
     // 4. Loop de ferramentas: leitura executa aqui; escrita vira proposta
     const texts: string[] = []
     const pending: PendingOut[] = []
+    const attachments: ChatAttachment[] = []
 
     const started = Date.now()
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -169,6 +191,19 @@ export async function POST(req: NextRequest) {
         if (!isCoachTool(call.name)) {
           results.push({ type: 'tool_result', tool_use_id: call.id, content: 'Ferramenta inexistente.', is_error: true })
           needsFollowUp = true
+          continue
+        }
+
+        if (isDisplayTool(call.name)) {
+          const shown = await buildDisplay(call.name, call.input ?? {}, ctx).catch(e => ({ error: e instanceof Error ? e.message : 'erro' }))
+          if ('error' in shown) {
+            results.push({ type: 'tool_result', tool_use_id: call.id, content: shown.error, is_error: true })
+            needsFollowUp = true
+          } else {
+            // Mesmo card duas vezes na mesma resposta não ajuda.
+            for (const a of shown) if (!attachments.some(x => x.workout_id === a.workout_id)) attachments.push(a)
+            results.push({ type: 'tool_result', tool_use_id: call.id, content: 'Card com os exercícios exibido ao aluno abaixo da sua mensagem. Não liste os exercícios no texto.' })
+          }
           continue
         }
 
@@ -219,11 +254,13 @@ export async function POST(req: NextRequest) {
       messages.push({ role: 'user', content: results })
     }
 
-    const reply = texts.join('\n\n') || proposalReply(pending.map(p => p.summary))
-    console.info('[coach] done', { user: user.id, ms: Date.now() - started, proposals: pending.length })
-    await saveAssistant(ctx, reply)
+    const reply =
+      texts.join('\n\n') ||
+      (pending.length ? proposalReply(pending.map(p => p.summary)) : attachments.length ? 'Aqui está o seu treino de hoje 👇' : proposalReply([]))
+    console.info('[coach] done', { user: user.id, ms: Date.now() - started, proposals: pending.length, cards: attachments.length })
+    await saveAssistant(ctx, reply, attachments)
 
-    return NextResponse.json({ message: reply, pendingActions: pending })
+    return NextResponse.json({ message: reply, pendingActions: pending, attachments })
   } catch (err) {
     const info = describeCoachError(err)
     console.error('[POST /api/chat]', info.code, err)

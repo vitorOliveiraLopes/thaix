@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
-import { buildChatTimeline, type ActionDbStatus, type ActionState } from '@thaix/core';
+import { buildChatTimeline, parseAttachments, type ActionDbStatus, type ActionState, type ChatAttachment } from '@thaix/core';
 
 import { qk } from './query';
 import { supabase } from './supabase';
 
-export type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string; created_at: string };
+export type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string; created_at: string; attachments: ChatAttachment[] };
 export type ChatAction = {
   id: string;
   toolName: string;
@@ -30,12 +30,19 @@ export function useChatHistory(userId: string) {
     queryFn: async () => {
       const { data: rows, error } = await supabase
         .from('chat_messages')
-        .select('id, role, content, created_at')
+        // '*': funciona antes e depois da coluna attachments existir.
+        .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(HISTORY_LIMIT);
       if (error) throw new Error(error.message);
-      const messages = (rows ?? []) as ChatMessage[];
+      const messages: ChatMessage[] = (rows ?? []).map((m) => ({
+        id: m.id as string,
+        role: m.role as ChatMessage['role'],
+        content: m.content as string,
+        created_at: m.created_at as string,
+        attachments: parseAttachments(m.attachments),
+      }));
 
       // Propostas do mesmo período (toda a conversa carregada).
       const oldest = messages.length ? messages[messages.length - 1].created_at : new Date(0).toISOString();
@@ -72,14 +79,3 @@ export function useChatHistory(userId: string) {
   return query;
 }
 
-/**
- * Apaga a conversa do aluno (mensagens e propostas). O coach começa do zero
- * na conversa, mas continua vendo os dados do aluno (treino, box, objetivos).
- */
-export async function clearChat(userId: string) {
-  // Propostas primeiro: se a segunda parte falhar, não sobram cards soltos.
-  const actions = await supabase.from('chat_pending_actions').delete().eq('user_id', userId);
-  if (actions.error) throw new Error(actions.error.message);
-  const messages = await supabase.from('chat_messages').delete().eq('user_id', userId);
-  if (messages.error) throw new Error(messages.error.message);
-}

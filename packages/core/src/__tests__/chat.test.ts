@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { PROPOSAL_TTL_MS, actionHistoryLine, actionState, buildChatTimeline, type TimelineAction, type TimelineMessage } from '../index'
+import {
+  PROPOSAL_TTL_MS,
+  actionHistoryLine,
+  actionState,
+  buildChatTimeline,
+  formatSetsTarget,
+  parseAttachments,
+  parseRichText,
+  parseSpans,
+  type TimelineAction,
+  type TimelineMessage,
+} from '../index'
 
 const t0 = Date.parse('2026-10-08T12:00:00Z')
 const at = (s: number) => new Date(t0 + s * 1000).toISOString()
@@ -36,5 +47,35 @@ describe('linha do tempo do chat', () => {
     expect(actionHistoryLine(act('Aliviar treino', 0, 'declined'), t0)).toContain('CANCELADA')
     expect(actionHistoryLine({ ...act('X', 0, 'failed'), result_note: 'treino já concluído' }, t0)).toContain('Motivo: treino já concluído')
     expect(actionHistoryLine(act('X', 0, 'confirmed'), t0)).toContain('CONFIRMADA')
+  })
+})
+
+describe('texto do coach', () => {
+  it('separa parágrafos, listas e negrito', () => {
+    const blocks = parseRichText('Seu treino de hoje:\n\n- **Pull-up negativa**: 3×5\n- Prancha: 3×30s\n\n1. Aquece\n2) Treina\n\nBora!')
+    expect(blocks.map(b => b.type)).toEqual(['paragraph', 'bullet', 'bullet', 'numbered', 'numbered', 'paragraph'])
+    expect(blocks[1].spans).toEqual([
+      { text: 'Pull-up negativa', bold: true },
+      { text: ': 3×5', bold: false },
+    ])
+    expect(blocks[4]).toMatchObject({ type: 'numbered', n: 2 })
+  })
+
+  it('linhas seguidas continuam o parágrafo e título vira negrito', () => {
+    const blocks = parseRichText('## Treino\nlinha 1\nlinha 2')
+    expect(blocks).toHaveLength(2)
+    expect(blocks[0].spans[0]).toEqual({ text: 'Treino', bold: true })
+    expect(blocks[1].spans.map(s => s.text).join('')).toBe('linha 1\nlinha 2')
+  })
+
+  it('asterisco sem par fica como texto', () => {
+    expect(parseSpans('3*5 reps')).toEqual([{ text: '3*5 reps', bold: false }])
+  })
+
+  it('aceita só anexos conhecidos', () => {
+    expect(parseAttachments(null)).toEqual([])
+    expect(parseAttachments([{ type: 'x' }, { type: 'workout', items: [] }])).toHaveLength(1)
+    expect(formatSetsTarget({ sets: 3, reps: 8, time_sec: null })).toBe('3×8')
+    expect(formatSetsTarget({ sets: 4, reps: null, time_sec: 30 })).toBe('4×30s')
   })
 })
