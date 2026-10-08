@@ -4,15 +4,17 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cloneWorkout, type GeneratedWorkout } from '@/lib/workout-generator'
-import { ArrowLeft, ChevronRight, ChevronLeft, CheckCircle, Play, Timer } from 'lucide-react'
+import { ArrowLeft, ChevronRight, ChevronLeft, CheckCircle, Play, Hourglass, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+type SetValues = (number | null)[]
+
 type ExerciseResult = {
   skill_exercise_id: string
-  reps_achieved?: number
-  time_achieved_sec?: number
+  reps_per_set?: SetValues
+  time_per_set?: SetValues
   perceived_effort: number
 }
 
@@ -24,26 +26,155 @@ const EFFORT_COLORS = [
   'text-yellow-500', 'text-orange-500', 'text-red-500',
 ]
 
-// ─── TimerDisplay ─────────────────────────────────────────────────────────────
+function bestOf(values: SetValues | undefined): number | undefined {
+  const valid = (values ?? []).filter((v): v is number => v !== null)
+  return valid.length > 0 ? Math.max(...valid) : undefined
+}
 
-function TimerDisplay({
+function filledCount(values: SetValues | undefined): number {
+  return (values ?? []).filter(v => v !== null).length
+}
+
+// ─── RestInfoCard ─────────────────────────────────────────────────────────────
+//
+// Informativo, sem timer. Só aparece para exercícios com mais de 1 série.
+
+function RestInfoCard({ restSec }: { restSec: number }) {
+  if (!restSec) return null
+  return (
+    <div className="flex items-center gap-2 px-3 py-2.5 bg-muted rounded-xl">
+      <Hourglass className="w-4 h-4 text-muted-foreground shrink-0" />
+      <span className="text-xs text-muted-foreground">
+        Descanso recomendado: {restSec}s entre séries
+      </span>
+    </div>
+  )
+}
+
+// ─── RepsMultiSet ─────────────────────────────────────────────────────────────
+//
+// Layout "compacta" aprovado: uma linha por série, sem meta numérica visível.
+// Séries preenchidas continuam com +/- ativos (nunca travam). A série ativa
+// é a primeira ainda não preenchida; séries seguintes ficam esmaecidas.
+
+function RepsMultiSet({
+  values,
+  onChange,
+}: {
+  values: SetValues
+  onChange: (next: SetValues) => void
+}) {
+  const activeIndex = values.findIndex(v => v === null)
+  const hasAnyFilled = values.some(v => v !== null)
+
+  function adjust(index: number, delta: number) {
+    const next = [...values]
+    const current = next[index] ?? 0
+    next[index] = Math.max(0, current + delta)
+    onChange(next)
+  }
+
+  return (
+    <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+      <p className="text-sm font-bold">Quantas reps você fez?</p>
+      <div className="flex flex-col gap-2">
+        {values.map((value, i) => {
+          const isFilled = value !== null
+          const isActive = i === activeIndex
+          const isPending = !isFilled && !isActive
+
+          if (isPending) {
+            return (
+              <div
+                key={i}
+                className="flex items-center justify-between px-3 py-2.5 rounded-xl border border-border opacity-45"
+              >
+                <span className="text-sm font-medium">Série {i + 1}</span>
+                <span className="text-xs text-muted-foreground">aguardando</span>
+              </div>
+            )
+          }
+
+          return (
+            <div
+              key={i}
+              className={cn(
+                'flex items-center justify-between px-3 py-2.5 rounded-xl',
+                isFilled
+                  ? 'border border-border bg-green-50'
+                  : 'border-2 border-primary'
+              )}
+            >
+              <span className="text-sm font-medium">Série {i + 1}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => adjust(i, -1)}
+                  className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-sm font-bold"
+                >
+                  −
+                </button>
+                <span className="text-base font-bold tabular-nums min-w-[18px] text-center">
+                  {value ?? 0}
+                </span>
+                <button
+                  onClick={() => adjust(i, 1)}
+                  className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-sm font-bold"
+                >
+                  +
+                </button>
+                {isFilled && (
+                  <CheckCircle className="w-4 h-4 text-green-500 ml-1" />
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {!hasAnyFilled && (
+        <p className="text-[11px] text-muted-foreground text-center pt-1">
+          Toque + para começar a registrar a série 1
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── TimerMultiSet ────────────────────────────────────────────────────────────
+//
+// Mesma filosofia da RepsMultiSet, mas para exercícios de tempo. Qualquer
+// série já registrada pode ser refeita a qualquer momento — não trava.
+
+function TimerMultiSet({
   targetSec,
   totalSets,
-  onComplete,
+  values,
+  onChange,
 }: {
   targetSec: number
   totalSets: number
-  onComplete: (sec: number) => void
+  values: SetValues
+  onChange: (next: SetValues) => void
 }) {
-  const [currentSet, setCurrentSet] = useState(1)
-  const [running, setRunning]       = useState(false)
-  const [elapsed, setElapsed]       = useState(0)
-  const [bestTime, setBestTime]     = useState<number | null>(null)
+  const [running, setRunning] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  const firstNull = values.findIndex(v => v === null)
+  const activeIndex = editingIndex ?? (firstNull === -1 ? totalSets - 1 : firstNull)
 
   function clearTimer() {
     clearInterval(intervalRef.current!)
     intervalRef.current = null
+  }
+
+  function commit(sec: number) {
+    const next = [...values]
+    next[activeIndex] = sec
+    onChange(next)
+    setEditingIndex(null)
+    setElapsed(0)
+    setRunning(false)
   }
 
   function start() {
@@ -53,10 +184,7 @@ function TimerDisplay({
         const next = prev + 1
         if (next >= targetSec) {
           clearTimer()
-          setRunning(false)
-          // Série completa — registrar automaticamente
-          setBestTime(t => (t === null || next > t) ? next : t)
-          setTimeout(() => onComplete(next), 0)
+          setTimeout(() => commit(next), 0)
         }
         return next
       })
@@ -65,110 +193,102 @@ function TimerDisplay({
 
   function stop() {
     clearTimer()
-    setRunning(false)
-    const achieved = elapsed
-    setBestTime(t => (t === null || achieved > t) ? achieved : t)
-    setTimeout(() => onComplete(achieved), 0)
+    setTimeout(() => commit(elapsed), 0)
   }
 
-  function resetAndNextSet() {
+  function redoSet(index: number) {
     clearTimer()
-    setRunning(false)
     setElapsed(0)
-    if (currentSet < totalSets) setCurrentSet(s => s + 1)
+    setRunning(false)
+    setEditingIndex(index)
   }
 
   useEffect(() => () => clearTimer(), [])
 
   const pad = (n: number) => String(n).padStart(2, '0')
   const pct = Math.min((elapsed / targetSec) * 100, 100)
-  const isDone = elapsed > 0 && !running
 
   return (
-    <div className="bg-foreground rounded-2xl p-5 text-center space-y-4">
-      {/* Indicador de série */}
-      {totalSets > 1 && (
-        <div className="flex justify-center gap-2">
-          {Array.from({ length: totalSets }, (_, i) => (
-            <div
-              key={i}
-              className={cn(
-                'w-2 h-2 rounded-full transition-all',
-                i + 1 < currentSet
-                  ? 'bg-primary'
-                  : i + 1 === currentSet
-                  ? 'bg-white'
-                  : 'bg-white/20'
-              )}
-            />
-          ))}
+    <div className="space-y-3">
+      <div className="bg-white rounded-2xl p-4 shadow-sm space-y-2">
+        <p className="text-sm font-bold mb-1">Séries</p>
+        <div className="flex flex-col gap-2">
+          {values.map((value, i) => {
+            const isFilled = value !== null
+            const isActive = i === activeIndex
+
+            if (!isFilled && !isActive) {
+              return (
+                <div
+                  key={i}
+                  className="flex items-center justify-between px-3 py-2.5 rounded-xl border border-border opacity-45"
+                >
+                  <span className="text-sm font-medium">Série {i + 1}</span>
+                  <span className="text-xs text-muted-foreground">aguardando</span>
+                </div>
+              )
+            }
+
+            if (isFilled && !isActive) {
+              return (
+                <button
+                  key={i}
+                  onClick={() => redoSet(i)}
+                  className="flex items-center justify-between px-3 py-2.5 rounded-xl border border-border bg-green-50 w-full"
+                >
+                  <span className="text-sm font-medium">Série {i + 1}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-bold tabular-nums">{value}s</span>
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <Pencil className="w-3 h-3 text-muted-foreground" />
+                  </div>
+                </button>
+              )
+            }
+
+            return (
+              <div
+                key={i}
+                className="flex items-center justify-between px-3 py-2.5 rounded-xl border-2 border-primary"
+              >
+                <span className="text-sm font-medium">Série {i + 1}</span>
+                {isFilled && <span className="text-xs text-muted-foreground">refazendo</span>}
+              </div>
+            )
+          })}
         </div>
-      )}
-
-      {/* Timer */}
-      <div className="text-5xl font-extrabold text-white tabular-nums">
-        {pad(Math.floor(elapsed / 60))}:{pad(elapsed % 60)}
-        <span className="text-white/40 text-2xl">
-          {' '}/ {Math.floor(targetSec / 60)}:{pad(targetSec % 60)}
-        </span>
       </div>
 
-      {/* Barra de progresso */}
-      <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
-        <div
-          className="h-full bg-primary rounded-full transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-
-      {/* Melhor tempo da sessão */}
-      {bestTime !== null && (
-        <p className="text-xs text-white/50">
-          Melhor tempo: {pad(Math.floor(bestTime / 60))}:{pad(bestTime % 60)}
-        </p>
-      )}
-
-      {/* Botões */}
-      {!running && elapsed === 0 && (
-        <button
-          onClick={start}
-          className="w-full h-12 bg-primary text-white font-bold rounded-full flex items-center justify-center gap-2"
-        >
-          <Play className="w-4 h-4" />
-          {currentSet > 1 ? `Série ${currentSet} — Iniciar` : 'Iniciar'}
-        </button>
-      )}
-
-      {running && (
-        <button
-          onClick={stop}
-          className="w-full h-12 bg-white/10 text-white font-bold rounded-full"
-        >
-          Parar e registrar
-        </button>
-      )}
-
-      {isDone && (
-        <div className="flex gap-2">
-          {currentSet < totalSets && (
-            <button
-              onClick={resetAndNextSet}
-              className="flex-1 h-12 bg-white/10 text-white font-bold rounded-full"
-            >
-              Próxima série →
-            </button>
-          )}
+      <div className="bg-foreground rounded-2xl p-5 text-center space-y-4">
+        <div className="text-5xl font-extrabold text-white tabular-nums">
+          {pad(Math.floor(elapsed / 60))}:{pad(elapsed % 60)}
+          <span className="text-white/40 text-2xl">
+            {' '}/ {Math.floor(targetSec / 60)}:{pad(targetSec % 60)}
+          </span>
+        </div>
+        <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary rounded-full transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        {!running ? (
           <button
-            onClick={() => { setElapsed(0); setBestTime(null) }}
-            className={cn(
-              'h-12 text-white/70 font-medium rounded-full border border-white/20',
-              currentSet < totalSets ? 'px-4 text-sm' : 'flex-1'
-            )}
+            onClick={start}
+            className="w-full h-12 bg-primary text-white font-bold rounded-full flex items-center justify-center gap-2"
           >
-            Refazer
+            <Play className="w-4 h-4" />
+            Iniciar série {activeIndex + 1}
           </button>
-        </div>
-      )}
+        ) : (
+          <button
+            onClick={stop}
+            className="w-full h-12 bg-white/10 text-white font-bold rounded-full"
+          >
+            Parar e registrar
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -250,21 +370,27 @@ export default function SkillWorkoutPage() {
   const currentItem = workout.items[currentIndex]
   const isLast      = currentIndex === workout.items.length - 1
   const isTimeBased = !!currentItem.time_sec
+  const totalSets   = currentItem.sets ?? 1
 
   // Resultado indexado pelo par (skill_exercise_id + order_index) para suportar
   // exercícios repetidos no mesmo treino sem colisão de chave
-  const resultKey    = `${currentItem.skill_exercise_id}-${currentIndex}`
+  const resultKey     = `${currentItem.skill_exercise_id}-${currentIndex}`
   const currentResult = results[resultKey]
 
-  // Botão "Próximo" só aparece quando reps/tempo E esforço estão registrados
+  const setValues: SetValues =
+    (isTimeBased ? currentResult?.time_per_set : currentResult?.reps_per_set)
+    ?? Array(totalSets).fill(null)
+
+  const allSetsFilled = filledCount(setValues) === totalSets
+  const anySetFilled  = filledCount(setValues) > 0
+
+  // Botão "Próximo" só aparece quando TODAS as séries E o esforço foram registrados
   const canAdvance =
-    currentResult?.perceived_effort !== undefined &&
-    (currentResult?.reps_achieved !== undefined ||
-      currentResult?.time_achieved_sec !== undefined)
+    currentResult?.perceived_effort !== undefined && allSetsFilled
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
-  function setResult(partial: Partial<ExerciseResult>) {
+  function setSetValues(next: SetValues) {
     setResults(prev => {
       const existing = prev[resultKey]
       return {
@@ -272,9 +398,23 @@ export default function SkillWorkoutPage() {
         [resultKey]: {
           skill_exercise_id: currentItem.skill_exercise_id,
           perceived_effort:  existing?.perceived_effort ?? 3,
-          reps_achieved:     existing?.reps_achieved,
-          time_achieved_sec: existing?.time_achieved_sec,
-          ...partial,
+          reps_per_set:       isTimeBased ? existing?.reps_per_set : next,
+          time_per_set:       isTimeBased ? next : existing?.time_per_set,
+        } as ExerciseResult,
+      }
+    })
+  }
+
+  function setEffort(n: number) {
+    setResults(prev => {
+      const existing = prev[resultKey]
+      return {
+        ...prev,
+        [resultKey]: {
+          skill_exercise_id: currentItem.skill_exercise_id,
+          perceived_effort:  n,
+          reps_per_set:       existing?.reps_per_set,
+          time_per_set:       existing?.time_per_set,
         } as ExerciseResult,
       }
     })
@@ -285,22 +425,33 @@ export default function SkillWorkoutPage() {
     else setDone(true)
   }
 
+  function buildPayloadItem(r: ExerciseResult) {
+    return {
+      skill_exercise_id: r.skill_exercise_id,
+      reps_per_set:      r.reps_per_set,
+      time_per_set:      r.time_per_set,
+      reps_achieved:     bestOf(r.reps_per_set),
+      time_achieved_sec: bestOf(r.time_per_set),
+      perceived_effort:  r.perceived_effort,
+    }
+  }
+
   async function handleFinish() {
     if (!workout) return
     setSaving(true)
 
-    // Converter results de volta para array usando skill_exercise_id
-    const resultValues = Object.values(results).reduce<Record<string, ExerciseResult>>(
-      (acc, r) => {
-        // Se houver duplicatas, manter o resultado com maior perceived_effort
-        const existing = acc[r.skill_exercise_id]
-        if (!existing || r.perceived_effort > existing.perceived_effort) {
-          acc[r.skill_exercise_id] = r
-        }
-        return acc
-      },
-      {}
-    )
+    // Converter results de volta para um item por skill_exercise_id.
+    // Em caso de exercício repetido, mantém o de maior esforço.
+    const bySkillExercise = Object.values(results).reduce<
+      Record<string, ReturnType<typeof buildPayloadItem>>
+    >((acc, r) => {
+      const item = buildPayloadItem(r)
+      const existing = acc[r.skill_exercise_id]
+      if (!existing || r.perceived_effort > existing.perceived_effort) {
+        acc[r.skill_exercise_id] = item
+      }
+      return acc
+    }, {})
 
     try {
       const res = await fetch('/api/workouts/complete', {
@@ -308,7 +459,7 @@ export default function SkillWorkoutPage() {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           workoutId: activeWorkoutId,
-          results:   Object.values(resultValues),
+          results:   Object.values(bySkillExercise),
         }),
       })
 
@@ -342,6 +493,8 @@ export default function SkillWorkoutPage() {
           {workout.items.map((item, idx) => {
             const key = `${item.skill_exercise_id}-${idx}`
             const r   = results[key]
+            const bestReps = bestOf(r?.reps_per_set)
+            const bestTime = bestOf(r?.time_per_set)
             return (
               <div
                 key={key}
@@ -349,11 +502,11 @@ export default function SkillWorkoutPage() {
               >
                 <p className="text-sm font-medium">{item.exercise.exercise_name}</p>
                 <div className="text-right">
-                  {r?.reps_achieved !== undefined && (
-                    <p className="text-xs text-primary font-bold">{r.reps_achieved} reps</p>
+                  {bestReps !== undefined && (
+                    <p className="text-xs text-primary font-bold">melhor série: {bestReps} reps</p>
                   )}
-                  {r?.time_achieved_sec !== undefined && (
-                    <p className="text-xs text-primary font-bold">{r.time_achieved_sec}s</p>
+                  {bestTime !== undefined && (
+                    <p className="text-xs text-primary font-bold">melhor série: {bestTime}s</p>
                   )}
                   {r?.perceived_effort !== undefined && (
                     <p className={cn('text-[10px]', EFFORT_COLORS[r.perceived_effort])}>
@@ -416,23 +569,14 @@ export default function SkillWorkoutPage() {
           </div>
         </div>
 
-        {/* Info do exercício */}
+        {/* Info do exercício — sem meta numérica de reps/tempo, só o essencial */}
         <div className="bg-white rounded-2xl p-4 shadow-sm space-y-2">
           <p className="text-xs font-bold tracking-widest text-primary uppercase">
             {currentItem.exercise.category}
           </p>
           <h2 className="text-xl font-extrabold">{currentItem.exercise.exercise_name}</h2>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span>{currentItem.sets} séries</span>
-            <span>·</span>
-            {isTimeBased ? (
-              <span className="flex items-center gap-1">
-                <Timer className="w-3.5 h-3.5" />
-                {currentItem.time_sec}s
-              </span>
-            ) : (
-              <span>{currentItem.reps} reps</span>
-            )}
+            <span>{totalSets} série{totalSets > 1 ? 's' : ''}</span>
           </div>
           {currentItem.exercise.note && (
             <p className="text-xs text-muted-foreground border-t border-border pt-2">
@@ -443,57 +587,32 @@ export default function SkillWorkoutPage() {
 
         {/* Registro de resultado */}
         {isTimeBased ? (
-          <TimerDisplay
+          <TimerMultiSet
             key={`timer-${currentIndex}`}
             targetSec={currentItem.time_sec!}
-            totalSets={currentItem.sets}
-            onComplete={sec => setResult({ time_achieved_sec: sec })}
+            totalSets={totalSets}
+            values={setValues}
+            onChange={setSetValues}
           />
         ) : (
-          <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
-            <p className="text-sm font-bold">Quantas reps você fez?</p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() =>
-                  setResult({
-                    reps_achieved: Math.max(
-                      0,
-                      (currentResult?.reps_achieved ?? currentItem.reps ?? 0) - 1
-                    ),
-                  })
-                }
-                className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-xl font-bold"
-              >
-                −
-              </button>
-              <span className="flex-1 text-center text-3xl font-extrabold tabular-nums text-primary">
-                {currentResult?.reps_achieved ?? currentItem.reps ?? 0}
-              </span>
-              <button
-                onClick={() =>
-                  setResult({
-                    reps_achieved:
-                      (currentResult?.reps_achieved ?? currentItem.reps ?? 0) + 1,
-                  })
-                }
-                className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-xl font-bold"
-              >
-                +
-              </button>
-            </div>
-          </div>
+          <RepsMultiSet
+            values={setValues}
+            onChange={setSetValues}
+          />
         )}
 
-        {/* Esforço percebido — aparece após registrar reps ou tempo */}
-        {(currentResult?.reps_achieved !== undefined ||
-          currentResult?.time_achieved_sec !== undefined) && (
+        {/* Descanso — só para exercícios com mais de 1 série */}
+        {totalSets > 1 && <RestInfoCard restSec={currentItem.exercise.rest_sec} />}
+
+        {/* Esforço percebido — aparece assim que ao menos uma série for registrada */}
+        {anySetFilled && (
           <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
             <p className="text-sm font-bold">Como foi?</p>
             <div className="flex gap-2">
               {[1, 2, 3, 4, 5].map(n => (
                 <button
                   key={n}
-                  onClick={() => setResult({ perceived_effort: n })}
+                  onClick={() => setEffort(n)}
                   className={cn(
                     'flex-1 py-2 rounded-xl text-xs font-bold border transition-all',
                     currentResult?.perceived_effort === n
@@ -514,7 +633,7 @@ export default function SkillWorkoutPage() {
 
       </div>
 
-      {/* Navegação — botão só aparece quando reps/tempo E esforço estão preenchidos */}
+      {/* Navegação — botão só aparece quando todas as séries E o esforço estão preenchidos */}
       <div className="px-5 py-6 flex gap-3">
         {currentIndex > 0 && (
           <button

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { generateDailyWorkouts, type GeneratedWorkout } from '@/lib/workout-generator'
-import { ChevronRight, CheckCircle } from 'lucide-react'
+import { ChevronRight, CheckCircle, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -22,6 +22,18 @@ const SKILL_NAMES: Record<string, string> = {
   'bmu':     'Bar Muscle-up',
   't2b':     'Toes-to-Bar',
   'hspu':    'HSPU',
+}
+
+const LEVEL_LABELS: Record<string, string> = {
+  iniciante:     'Iniciante',
+  intermediario: 'Intermediário',
+  avancado:      'Avançado',
+}
+
+const LEVEL_STYLES: Record<string, string> = {
+  iniciante:     'bg-green-100 text-green-700',
+  intermediario: 'bg-blue-100 text-blue-700',
+  avancado:      'bg-purple-100 text-purple-700',
 }
 
 const SKILL_ICONS: Record<string, string> = {
@@ -127,6 +139,7 @@ function WorkoutCard({
   const PREVIEW = 4
   const hasMore = workout.items.length > PREVIEW
   const visible = expanded ? workout.items : workout.items.slice(0, PREVIEW)
+  const workoutLevel = workout.items[0]?.exercise?.level
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
@@ -148,9 +161,19 @@ function WorkoutCard({
               <h3 className="font-extrabold">{SKILL_NAMES[workout.skill_id]}</h3>
             </div>
           </div>
-          <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full font-medium">
-            Semana {workout.week_number}
-          </span>
+          <div className="flex flex-col items-end gap-1">
+            {workoutLevel && (
+              <span className={cn(
+                'text-[10px] font-bold px-2 py-0.5 rounded-full',
+                LEVEL_STYLES[workoutLevel] ?? 'bg-muted text-muted-foreground'
+              )}>
+                {LEVEL_LABELS[workoutLevel] ?? workoutLevel}
+              </span>
+            )}
+            <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full font-medium">
+              Semana {workout.week_number}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -224,6 +247,67 @@ function AllDoneCard() {
       <p className="text-sm text-muted-foreground leading-snug">
         Você concluiu todos os treinos de hoje. Descanse bem, hidrate-se e volte amanhã mais forte.
       </p>
+    </div>
+  )
+}
+
+// ─── ProgressionTooltip ───────────────────────────────────────────────────────
+//
+// Explica em linguagem simples o critério de progressão de nível, sem expor
+// os números exatos da regra (2/3 séries, esforço médio). Fica acima dos
+// treinos do dia na home — onde o aluno já olha todo dia.
+
+function ProgressionTooltip() {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="mb-1">
+      <div className="flex items-center justify-between px-1">
+        <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
+          Treinos do dia
+        </p>
+        <button
+          onClick={() => setOpen(o => !o)}
+          aria-label="Como funciona a progressão de nível"
+          className="w-5 h-5 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Info className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {open && (
+        <div className="mt-2 bg-white rounded-2xl p-4 shadow-sm space-y-3">
+          <p className="text-xs font-bold">Como você sobe de nível</p>
+
+          {/* Barra de níveis colorida — ilustra a trilha, não indica onde
+              o aluno está agora, já que cada skill pode ter um nível diferente */}
+          <div>
+            <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
+              <div className="flex-1 bg-green-400" />
+              <div className="flex-1 bg-blue-400" />
+              <div className="flex-1 bg-purple-400" />
+            </div>
+            <div className="flex justify-between mt-1.5">
+              <span className="text-[10px] font-medium text-green-700">Iniciante</span>
+              <span className="text-[10px] font-medium text-blue-700">Intermediário</span>
+              <span className="text-[10px] font-medium text-purple-700">Avançado</span>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Complete a maior parte das séries dentro da meta, em pelo menos
+            2 treinos seguidos dessa skill.
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Se o treino começar a parecer fácil demais, é sinal de que está
+            quase lá.
+          </p>
+          <p className="text-[11px] text-muted-foreground/70 pt-1">
+            A gente acompanha isso automaticamente — seu próximo treino já
+            vem no nível seguinte quando bater.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -365,6 +449,8 @@ export function SkillWorkouts() {
 
   return (
     <div className="space-y-3">
+      <ProgressionTooltip />
+
       {recentAvgEffort !== null && recentAvgEffort >= 3.5 && (
         <HighEffortBanner avgEffort={recentAvgEffort} />
       )}

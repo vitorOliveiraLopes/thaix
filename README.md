@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ThaixSkill
 
-## Getting Started
+App de treino de skills de calistenia e CrossFit da Coach Thaís.
 
-First, run the development server:
+## Estrutura
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+thaix/
+├─ apps/mobile/      App iOS e Android (Expo). Ver apps/mobile/README.md
+├─ packages/core/    @thaix/core: regras de negócio e gerador de treino, sem I/O, com testes
+├─ src/              Next.js (web atual). Vira apps/api (só API) na próxima fase
+├─ supabase/sql/     Scripts SQL aplicados no Supabase
+└─ docs/             Decisões e pendências (ex.: pendencias-thais.md)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+A arquitetura completa (app, API, core e agente coach) está no documento de arquitetura v2.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Comandos (raiz)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Comando | O que faz |
+|---|---|
+| `npm install` | Instala a web e liga o `@thaix/core` (workspace) |
+| `npm test` | Roda os testes do core |
+| `npm run typecheck` | Checa os tipos da web e do core |
+| `npm run dev` | Sobe a web em http://localhost:3000 |
+| `npm run build` | Testes + build do Next (é o que a Vercel roda) |
 
-## Learn More
+Para o app, veja `apps/mobile/README.md`.
 
-To learn more about Next.js, take a look at the following resources:
+## Regras
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Lógica de treino (níveis, progressão, seleção de exercícios) só em `packages/core`, com teste.
+- Chaves secretas (service role, Anthropic) nunca com prefixo `NEXT_PUBLIC_` ou `EXPO_PUBLIC_`.
+- `.env*` não vai para o git.

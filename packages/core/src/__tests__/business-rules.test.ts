@@ -285,3 +285,93 @@ describe('calculateStreak', () => {
     expect(calculateStreak(['2026-07-17', '2026-07-20', '2026-07-21'], '2026-07-21')).toBe(2)
   })
 })
+
+// ─── Múltiplas séries ───────────────────────────────────────────────────────
+
+import {
+  bestOfSets,
+  countSetsMetGoal,
+  setsRequiredToPass,
+  exerciseMetGoalMultiSet,
+  sessionMetAllGoalsMultiSet,
+  type MultiSetExerciseGoal,
+  type MultiSetExerciseResult,
+} from '../business-rules'
+
+describe('bestOfSets', () => {
+  it('retorna o maior valor entre as séries', () => {
+    expect(bestOfSets([8, 6, 4])).toBe(8)
+  })
+  it('ignora nulos', () => {
+    expect(bestOfSets([null, 5, undefined, 3])).toBe(5)
+  })
+  it('array vazio ou só nulos retorna 0', () => {
+    expect(bestOfSets([])).toBe(0)
+    expect(bestOfSets([null, null])).toBe(0)
+  })
+})
+
+describe('countSetsMetGoal', () => {
+  it('conta séries de reps que bateram a meta', () => {
+    expect(countSetsMetGoal({ reps: 8 }, [8, 6, 9])).toBe(2)
+  })
+  it('conta séries de tempo que bateram a meta', () => {
+    expect(countSetsMetGoal({ time_sec: 15 }, [16, 10, 15])).toBe(2)
+  })
+  it('ignora séries não realizadas (null)', () => {
+    expect(countSetsMetGoal({ reps: 8 }, [8, null, null])).toBe(1)
+  })
+})
+
+describe('setsRequiredToPass', () => {
+  it('3 séries → precisa de 2', () => { expect(setsRequiredToPass(3)).toBe(2) })
+  it('2 séries → precisa das 2', () => { expect(setsRequiredToPass(2)).toBe(2) })
+  it('1 série → precisa de 1', () => { expect(setsRequiredToPass(1)).toBe(1) })
+  it('4 séries → precisa de 3', () => { expect(setsRequiredToPass(4)).toBe(3) })
+})
+
+describe('exerciseMetGoalMultiSet', () => {
+  it('2 de 3 séries batendo meta → passa', () => {
+    expect(exerciseMetGoalMultiSet({ reps: 8 }, [8, 6, 9], 3)).toBe(true)
+  })
+  it('só 1 de 3 séries batendo meta → não passa', () => {
+    expect(exerciseMetGoalMultiSet({ reps: 8 }, [8, 5, 4], 3)).toBe(false)
+  })
+  it('3 de 3 séries batendo meta → passa (caso ideal)', () => {
+    expect(exerciseMetGoalMultiSet({ reps: 8 }, [8, 8, 8], 3)).toBe(true)
+  })
+  it('exercício de 1 série só precisa dessa 1 bater', () => {
+    expect(exerciseMetGoalMultiSet({ reps: 8 }, [8], 1)).toBe(true)
+    expect(exerciseMetGoalMultiSet({ reps: 8 }, [5], 1)).toBe(false)
+  })
+})
+
+describe('sessionMetAllGoalsMultiSet', () => {
+  const goals: MultiSetExerciseGoal[] = [
+    { skill_exercise_id: 'e1', sets: 3, reps: 8 },
+    { skill_exercise_id: 'e2', sets: 3, time_sec: 15 },
+  ]
+
+  it('true quando todos os exercícios passam no critério de 2/3', () => {
+    const results: MultiSetExerciseResult[] = [
+      { skill_exercise_id: 'e1', reps_per_set: [8, 6, 9], perceived_effort: 2 },
+      { skill_exercise_id: 'e2', time_per_set: [16, 10, 15], perceived_effort: 2 },
+    ]
+    expect(sessionMetAllGoalsMultiSet(goals, results)).toBe(true)
+  })
+
+  it('false quando um exercício não bate 2/3 das séries', () => {
+    const results: MultiSetExerciseResult[] = [
+      { skill_exercise_id: 'e1', reps_per_set: [8, 5, 4], perceived_effort: 2 },
+      { skill_exercise_id: 'e2', time_per_set: [16, 10, 15], perceived_effort: 2 },
+    ]
+    expect(sessionMetAllGoalsMultiSet(goals, results)).toBe(false)
+  })
+
+  it('false quando resultado não tem meta correspondente', () => {
+    const results: MultiSetExerciseResult[] = [
+      { skill_exercise_id: 'e3', reps_per_set: [8, 8, 8], perceived_effort: 2 },
+    ]
+    expect(sessionMetAllGoalsMultiSet(goals, results)).toBe(false)
+  })
+})
