@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
+import { queryClient } from './query';
 import { supabase } from './supabase';
 
 type AuthResult = { error: string | null };
@@ -12,6 +13,7 @@ type AuthState = {
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signUp: (name: string, email: string, password: string) => Promise<AuthResult & { needsConfirmation: boolean }>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<AuthResult>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -41,8 +43,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
+      // Dados em cache são do aluno anterior: nunca mostrar para outra conta.
+      if (event === 'SIGNED_OUT') queryClient.clear();
     });
 
     return () => {
@@ -75,6 +79,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async signOut() {
       await supabase.auth.signOut();
+      queryClient.clear();
+    },
+
+    async resetPassword(email) {
+      // O link do e-mail abre a página de nova senha da versão web.
+      const base = (process.env.EXPO_PUBLIC_API_URL ?? 'https://thaix.vercel.app').replace(/\/+$/, '');
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${base}/auth/callback?next=/reset-password`,
+      });
+      return { error: error ? authErrorMessage(error.message) : null };
     },
   };
 
