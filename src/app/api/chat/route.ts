@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   EMERGENCY_REPLY,
   OFF_TOPIC_REPLY,
+  actionHistoryLine,
+  buildChatTimeline,
   detectHealthConcern,
   detectOffTopic,
   isCoachTool,
   isWriteTool,
   proposalReply,
+  type TimelineAction,
 } from '@thaix/core'
 
 import { getRouteClient } from '@/lib/supabase/route-client'
@@ -101,16 +104,35 @@ export async function POST(req: NextRequest) {
 
     // 3. Histórico + contexto do aluno
     const [{ data: rows }, snapshot] = await Promise.all([
-      client.from('chat_messages').select('role, content').eq('user_id', user.id).order('created_at', { ascending: false }).limit(HISTORY_SIZE),
+      client
+        .from('chat_messages')
+        .select('id, role, content, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(HISTORY_SIZE),
       loadSnapshot(ctx),
     ])
-    // A API exige começar pelo usuário e alternar papéis: mensagens seguidas
-    // do mesmo papel (ex.: resposta + resultado de uma confirmação) viram uma só.
+    const history = (rows ?? []) as { id: string; role: 'user' | 'assistant'; content: string; created_at: string }[]
+    // Propostas do mesmo período, com a decisão do aluno: o coach precisa
+    // saber o que foi confirmado ou cancelado.
+    const oldest = history.length ? history[history.length - 1].created_at : new Date().toISOString()
+    const { data: actionRows } = await client
+      .from('chat_pending_actions')
+      .select('id, status, summary, result_note, created_at')
+      .eq('user_id', user.id)
+      .gte('created_at', oldest)
+      .order('created_at', { ascending: true })
+      .limit(HISTORY_SIZE)
+
+    // A API exige começar pelo usuário e alternar papéis: entradas seguidas
+    // do mesmo papel (ex.: resposta + decisão de uma proposta) viram uma só.
     const messages: Message[] = []
-    for (const m of ((rows ?? []) as { role: 'user' | 'assistant'; content: string }[]).reverse()) {
+    for (const entry of buildChatTimeline(history, (actionRows ?? []) as TimelineAction[])) {
+      const role = entry.kind === 'msg' ? entry.msg.role : 'assistant'
+      const content = entry.kind === 'msg' ? entry.msg.content : actionHistoryLine(entry.action)
       const last = messages[messages.length - 1]
-      if (last && last.role === m.role && typeof last.content === 'string') last.content += `\n\n${m.content}`
-      else messages.push({ role: m.role, content: m.content })
+      if (last && last.role === role && typeof last.content === 'string') last.content += `\n\n${content}`
+      else messages.push({ role, content })
     }
     while (messages.length && messages[0].role !== 'user') messages.shift()
 

@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getRouteClient } from '@/lib/supabase/route-client'
+import { PROPOSAL_TTL_MS } from '@thaix/core'
+
 import { saoPauloToday, type CoachCtx } from '@/lib/coach/context'
 import { executeProposal } from '@/lib/coach/tools'
-
-/** Propostas mais velhas que isso precisam ser refeitas (o treino pode ter mudado). */
-const PROPOSAL_TTL_MS = 30 * 60_000
 
 // ─── POST /api/chat/confirm ───────────────────────────────────────────────────
 //
@@ -35,13 +34,17 @@ export async function POST(req: NextRequest) {
     // Marca como resolvida ANTES de executar: dois toques rápidos não gravam duas vezes.
     const { data: claimed } = await client
       .from('chat_pending_actions')
-      .update({ status: confirmed ? 'confirmed' : 'declined', resolved_at: new Date().toISOString() })
+      .update({
+        status: confirmed ? 'confirmed' : 'declined',
+        resolved_at: new Date().toISOString(),
+        ...(confirmed ? {} : { result_note: 'Cancelado. Nada foi alterado.' }),
+      })
       .eq('id', actionId)
       .eq('status', 'pending')
       .select('id')
     if (!claimed?.length) return NextResponse.json({ error: 'Esta ação já foi resolvida' }, { status: 409 })
 
-    if (!confirmed) return NextResponse.json({ success: true, message: 'Ok, deixei como estava.', refresh: [] })
+    if (!confirmed) return NextResponse.json({ success: true, status: 'declined', message: 'Cancelado. Nada foi alterado.', refresh: [] })
 
     const params = (action.params ?? {}) as { payload?: unknown; today?: string; dow?: number }
     const expired = Date.now() - new Date(action.created_at).getTime() > PROPOSAL_TTL_MS
@@ -59,13 +62,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await client
-      .from('chat_pending_actions')
-      .update({ status: result.success ? 'confirmed' : 'failed', result_note: result.message })
-      .eq('id', actionId)
-    await client.from('chat_messages').insert({ user_id: user.id, role: 'assistant', content: result.message })
+    // O resultado fica no próprio card da proposta (o app mostra a decisão
+    // ali), e o coach lê esse estado no histórico da próxima mensagem.
+    const status = result.success ? 'confirmed' : 'failed'
+    await client.from('chat_pending_actions').update({ status, result_note: result.message }).eq('id', actionId)
 
-    return NextResponse.json(result)
+    return NextResponse.json({ ...result, status })
   } catch (err) {
     console.error('[POST /api/chat/confirm]', err)
     return NextResponse.json({ error: 'Não consegui processar essa ação agora.' }, { status: 500 })
