@@ -3,6 +3,7 @@ import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, type Theme } fro
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef } from 'react';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { ErrorView } from '@/components/ui';
 import { useAccount } from '@/lib/account';
@@ -121,12 +122,14 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AppThemeProvider>
-        <AuthProvider>
-          <RootNavigator />
-        </AuthProvider>
-      </AppThemeProvider>
-    </QueryClientProvider>
+    <KeyboardProvider>
+      <QueryClientProvider client={queryClient}>
+        <AppThemeProvider>
+          <AuthProvider>
+            <RootNavigator />
+          </AuthProvider>
+        </AppThemeProvider>
+      </QueryClientProvider>
+    </KeyboardProvider>
   );
 }

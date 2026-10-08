@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { EMERGENCY_REPLY, detectHealthConcern, isCoachTool, isWriteTool } from '@thaix/core'
 
 import { getRouteClient } from '@/lib/supabase/route-client'
-import { callClaude, type ContentBlock, type Message } from '@/lib/coach/anthropic'
+import { callClaude, describeCoachError, type ContentBlock, type Message } from '@/lib/coach/anthropic'
 import { describeSnapshot, loadSnapshot, saoPauloToday, type CoachCtx } from '@/lib/coach/context'
 import { COACH_SYSTEM_PROMPT, INJURY_HINT } from '@/lib/coach/prompt'
 import { buildProposal, runReadTool } from '@/lib/coach/tools'
@@ -177,7 +177,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ message: reply, pendingActions: pending })
   } catch (err) {
-    console.error('[POST /api/chat]', err)
-    return NextResponse.json({ error: 'O coach está indisponível agora. Tente em instantes.' }, { status: 500 })
+    const info = describeCoachError(err)
+    console.error('[POST /api/chat]', info.code, err)
+    return NextResponse.json({ error: info.message, code: info.code }, { status: info.status })
   }
 }

@@ -1,16 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { memo, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Card, Txt, tapFeedback, type IconName } from '@/components/ui';
@@ -116,7 +108,9 @@ export default function ChatScreen() {
         </Txt>
       </View>
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
+      {/* Mede a própria posição na tela (abaixo do cabeçalho, acima das abas):
+          o campo de texto sobe exatamente até ficar acima do teclado, no iOS e no Android. */}
+      <KeyboardAvoidingView style={styles.flex} behavior="padding" automaticOffset>
         {history.isPending ? (
           <View style={[styles.flex, styles.center]}>
             <ActivityIndicator color={c.primary} />
