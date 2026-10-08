@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AnthropicError, describeCoachError } from '../anthropic'
+import { AnthropicError, anthropicKey, describeCoachError } from '../anthropic'
 
 describe('describeCoachError', () => {
   it('chave ausente no servidor', () => {
@@ -26,5 +26,20 @@ describe('describeCoachError', () => {
     const info = describeCoachError(new Error('relation "x" does not exist'))
     expect(info.code).toBe('internal')
     expect(info.message).not.toContain('relation')
+  })
+})
+
+describe('anthropicKey', () => {
+  it('remove espaço, quebra de linha e aspas coladas no painel', () => {
+    expect(anthropicKey('  sk-ant-abc\n')).toBe('sk-ant-abc')
+    expect(anthropicKey('"sk-ant-abc"')).toBe('sk-ant-abc')
+    expect(anthropicKey("'sk-ant-abc' ")).toBe('sk-ant-abc')
+  })
+  it('vazio vira ausente', () => {
+    expect(anthropicKey('  ')).toBeNull()
+    expect(anthropicKey(undefined)).toBeNull()
+  })
+  it('403 é permissão, não chave inválida', () => {
+    expect(describeCoachError(new AnthropicError(403, 'permission_error', 'x')).code).toBe('ai_permission')
   })
 })
