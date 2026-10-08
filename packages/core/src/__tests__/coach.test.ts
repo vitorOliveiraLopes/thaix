@@ -4,6 +4,8 @@ import {
   applyOps,
   boxRecommendation,
   detectHealthConcern,
+  detectOffTopic,
+  proposalReply,
   estimateWorkoutMinutes,
   filterByEquipment,
   fitWorkoutToMinutes,
@@ -184,5 +186,31 @@ describe('definições das ferramentas', () => {
     expect(isWriteTool('get_today_workout')).toBe(false)
     expect(isWriteTool('fit_workout_to_time')).toBe(true)
     expect(isWriteTool('inexistente')).toBe(false)
+  })
+})
+
+describe('fora do escopo', () => {
+  it('marca perguntas que não são de treino', () => {
+    expect(detectOffTopic('O que posso comer hoje?')).toBe('nutrition')
+    expect(detectOffTopic('qual a previsão do tempo')).toBe('other')
+    expect(detectOffTopic('vai chover amanhã?')).toBe('other')
+    expect(detectOffTopic('me conta uma piada')).toBe('other')
+    expect(detectOffTopic('creatina vale a pena?')).toBe('nutrition')
+    expect(detectOffTopic('coach, qual a previsão do tempo?')).toBe('other')
+  })
+
+  it('deixa passar o que fala de treino', () => {
+    expect(detectOffTopic('hoje só tenho 20 min')).toBeNull()
+    expect(detectOffTopic('fiz Fran na box, foi pesado')).toBeNull()
+    expect(detectOffTopic('quanto falta pro muscle-up?')).toBeNull()
+    expect(detectOffTopic('posso treinar se vai chover?')).toBeNull()
+    expect(detectOffTopic('o que comer antes do treino?')).toBeNull()
+    expect(detectOffTopic('bebi 2 litros de água')).toBeNull()
+  })
+
+  it('monta resposta quando o modelo só propôs', () => {
+    expect(proposalReply(['Encaixar o treino de Pull-up em 20 min'])).toBe('Preparei isso: encaixar o treino de Pull-up em 20 min. Confirma aí embaixo 👇')
+    expect(proposalReply(['a', 'b'])).toContain('propostas abaixo')
+    expect(proposalReply([])).toContain('reformular')
   })
 })

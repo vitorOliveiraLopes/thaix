@@ -291,6 +291,62 @@ export const EMERGENCY_REPLY =
   '(SAMU 192 ou o pronto-socorro mais próximo). Se estiver sozinho, avise alguém perto de você. ' +
   'Quando estiver tudo bem, a gente volta a falar de treino.'
 
+// ─── Fora do escopo ───────────────────────────────────────────────────────────
+
+export type OffTopic = 'nutrition' | 'other' | null
+
+/** Termos de treino: se aparecem, a mensagem vai para o modelo decidir com contexto. */
+const TRAINING_TERMS =
+  /trein|wod|\bbox\b|crossfit|skill|pull|muscle|\bmu\b|hspu|parada de m[aã]o|t2b|toes|c2b|chest|kipping|butterfly|s[eé]ries?\b|\breps?\b|repeti[cç]|exerc[ií]cio|\bbarra\b|paralela|argola|aquec|mobilidade|alongament|descanso|recupera|n[ií]vel/i
+
+const NUTRITION = [
+  /o que (eu )?(posso|devo|vou) comer/i,
+  /\bcomer\b.*\b(hoje|agora|janta|almo[cç]o|caf[eé])/i,
+  /\breceitas?\b/i,
+  /card[aá]pio/i,
+  /\bdieta\b/i,
+  /calorias?|macros?\b|prote[ií]na/i,
+  /emagre[cç]|perder (peso|barriga|gordura)/i,
+  /suplement|\bwhey\b|creatina|pr[eé][- ]?treino/i,
+]
+
+const OTHER = [
+  /previs[aã]o do tempo|vai chover|como (est[aá]|vai estar) o (tempo|clima)|temperatura (hoje|amanh[aã]|agora)/i,
+  /elei[cç][aã]o|pol[ií]tic|presidente|governo|not[ií]cias?\b/i,
+  /futebol|brasileir[aã]o|libertadores|copa do mundo/i,
+  /bitcoin|cripto|a[cç][oõ]es da bolsa|investiment|cota[cç][aã]o do d[oó]lar/i,
+  /\bc[oó]digo\b|programa[cç][aã]o|\bpython\b|javascript/i,
+  /reda[cç][aã]o|li[cç][aã]o de casa|tarefa da escola|trabalho da faculdade/i,
+  /conta uma piada|me conta uma hist[oó]ria|escreve (um|uma) (poema|m[uú]sica|carta)/i,
+  /\bhor[oó]scopo\b|\bsigno\b/i,
+  /\bfilmes?\b|netflix|recomenda (um|uma) livro/i,
+]
+
+/**
+ * Pergunta claramente fora do papel do coach. Só marca quando a mensagem
+ * não fala de treino: "posso treinar com chuva?" vai para o modelo.
+ */
+export function detectOffTopic(text: string): OffTopic {
+  if (TRAINING_TERMS.test(text)) return null
+  if (NUTRITION.some(r => r.test(text))) return 'nutrition'
+  if (OTHER.some(r => r.test(text))) return 'other'
+  return null
+}
+
+export const OFF_TOPIC_REPLY: Record<Exclude<OffTopic, null>, string> = {
+  nutrition:
+    'Alimentação é com nutricionista 🙂 Aqui eu cuido do seu treino de skills, da recuperação e da hidratação. Quer ajustar algo no treino de hoje?',
+  other:
+    'Isso foge do que eu sei fazer 😅 Sou seu coach de skills: treino de hoje, progressão, técnica e a sua rotina. Bora falar de treino?',
+}
+
+/** Resposta quando o modelo só fez propostas, sem escrever texto. */
+export function proposalReply(summaries: string[]): string {
+  if (summaries.length === 0) return 'Não consegui responder agora. Tenta reformular?'
+  if (summaries.length === 1) return `Preparei isso: ${summaries[0].charAt(0).toLowerCase()}${summaries[0].slice(1)}. Confirma aí embaixo 👇`
+  return 'Preparei as propostas abaixo. Confirma o que fizer sentido 👇'
+}
+
 // ─── Box ──────────────────────────────────────────────────────────────────────
 
 export const BOX_KINDS = ['wod', 'forca', 'ginastica', 'cardio', 'outro'] as const

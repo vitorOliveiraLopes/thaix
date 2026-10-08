@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { EMERGENCY_REPLY, detectHealthConcern, isCoachTool, isWriteTool } from '@thaix/core'
+import {
+  EMERGENCY_REPLY,
+  OFF_TOPIC_REPLY,
+  detectHealthConcern,
+  detectOffTopic,
+  isCoachTool,
+  isWriteTool,
+  proposalReply,
+} from '@thaix/core'
 
 import { getRouteClient } from '@/lib/supabase/route-client'
 import { callClaude, describeCoachError, type ContentBlock, type Message } from '@/lib/coach/anthropic'
@@ -82,6 +90,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: EMERGENCY_REPLY, pendingActions: [] })
     }
 
+    // 2b. Fora do escopo óbvio (comida, clima, notícias…): resposta fixa, sem IA.
+    const offTopic = concern ? null : detectOffTopic(message)
+    if (offTopic) {
+      const reply = OFF_TOPIC_REPLY[offTopic]
+      await saveAssistant(ctx, reply)
+      console.info('[coach] off_topic', { user: user.id, kind: offTopic })
+      return NextResponse.json({ message: reply, pendingActions: [] })
+    }
+
     // 3. Histórico + contexto do aluno
     const [{ data: rows }, snapshot] = await Promise.all([
       client.from('chat_messages').select('role, content').eq('user_id', user.id).order('created_at', { ascending: false }).limit(HISTORY_SIZE),
@@ -109,13 +126,12 @@ export async function POST(req: NextRequest) {
       if (remaining < 8_000) break
       // Última rodada (ou pouco tempo sobrando): sem ferramentas, só a resposta.
       const lastRound = round === MAX_TOOL_ROUNDS - 1 || remaining < 20_000
+      const roundStart = Date.now()
       const response = await callClaude(COACH_SYSTEM_PROMPT, dynamic, messages, {
         allowTools: !lastRound,
         timeoutMs: Math.min(25_000, remaining - 3_000),
       })
-      if (response.usage) {
-        console.info('[coach] usage', { user: user.id, round, ...response.usage })
-      }
+      console.info('[coach] round', { user: user.id, round, ms: Date.now() - roundStart, stop: response.stop_reason, ...response.usage })
 
       const text = response.content.filter(b => b.type === 'text').map(b => (b as { text: string }).text).join('\n').trim()
       if (text) texts.push(text)
@@ -125,22 +141,26 @@ export async function POST(req: NextRequest) {
 
       messages.push({ role: 'assistant', content: response.content })
       const results: ContentBlock[] = []
+      let needsFollowUp = false
 
       for (const call of toolUses) {
         if (!isCoachTool(call.name)) {
           results.push({ type: 'tool_result', tool_use_id: call.id, content: 'Ferramenta inexistente.', is_error: true })
+          needsFollowUp = true
           continue
         }
 
         if (!isWriteTool(call.name)) {
           const data = await runReadTool(call.name, call.input ?? {}, ctx).catch(e => ({ error: e instanceof Error ? e.message : 'erro' }))
           results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(data).slice(0, MAX_TOOL_RESULT_CHARS) })
+          needsFollowUp = true
           continue
         }
 
         const proposal = await buildProposal(call.name, call.input ?? {}, ctx).catch(e => ({ error: e instanceof Error ? e.message : 'erro' }))
         if ('error' in proposal) {
           results.push({ type: 'tool_result', tool_use_id: call.id, content: proposal.error, is_error: true })
+          needsFollowUp = true
           continue
         }
 
@@ -158,6 +178,7 @@ export async function POST(req: NextRequest) {
 
         if (error || !inserted) {
           results.push({ type: 'tool_result', tool_use_id: call.id, content: 'Não consegui criar a proposta.', is_error: true })
+          needsFollowUp = true
           continue
         }
 
@@ -169,10 +190,15 @@ export async function POST(req: NextRequest) {
         })
       }
 
+      // Só propostas e todas criadas: a prévia já está na tela. Mais uma
+      // chamada ao modelo só atrasaria a resposta (era o gargalo do "só tenho 20 min").
+      if (!needsFollowUp) break
+
       messages.push({ role: 'user', content: results })
     }
 
-    const reply = texts.join('\n\n') || (pending.length ? 'Preparei a proposta abaixo. É só confirmar.' : 'Não consegui responder agora. Tenta reformular?')
+    const reply = texts.join('\n\n') || proposalReply(pending.map(p => p.summary))
+    console.info('[coach] done', { user: user.id, ms: Date.now() - started, proposals: pending.length })
     await saveAssistant(ctx, reply)
 
     return NextResponse.json({ message: reply, pendingActions: pending })

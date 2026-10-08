@@ -78,7 +78,8 @@ export async function callClaude(
       },
       body: JSON.stringify({
         model: COACH_MODEL,
-        max_tokens: 900,
+        // Respostas são curtas; limite baixo também reduz o tempo de resposta.
+        max_tokens: 600,
         system: [
           { type: 'text', text: staticPrompt, cache_control: { type: 'ephemeral' } },
           { type: 'text', text: dynamicPrompt },
