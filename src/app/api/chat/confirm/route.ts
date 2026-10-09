@@ -5,6 +5,7 @@ import { PROPOSAL_TTL_MS } from '@thaix/core'
 
 import { saoPauloToday, type CoachCtx } from '@/lib/coach/context'
 import { executeProposal } from '@/lib/coach/tools'
+import { reportServerError } from '@/lib/monitoring/server'
 
 // ─── POST /api/chat/confirm ───────────────────────────────────────────────────
 //
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
         result = await executeProposal(action.tool_name, params.payload ?? {}, { client, userId: user.id, ...date } satisfies CoachCtx)
       } catch (e) {
         console.error('[confirm] execute failed', e)
+        reportServerError(e, { route: 'chat/confirm', code: action.tool_name, userId: user.id })
         result = { success: false, message: 'Não consegui aplicar agora. Peça de novo em instantes.', refresh: [] }
       }
     }
@@ -70,6 +72,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...result, status })
   } catch (err) {
     console.error('[POST /api/chat/confirm]', err)
+    reportServerError(err, { route: 'chat/confirm' })
     return NextResponse.json({ error: 'Não consegui processar essa ação agora.' }, { status: 500 })
   }
 }

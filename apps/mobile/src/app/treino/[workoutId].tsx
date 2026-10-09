@@ -17,7 +17,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AchievementModal } from '@/components/achievement-modal';
 import { RepsSets, TimedSets } from '@/components/sets';
@@ -37,6 +37,7 @@ import { useUserId } from '@/lib/account';
 import { apiPost } from '@/lib/api';
 import { qk } from '@/lib/query';
 import { cloneWorkout, fetchWorkout, type Workout } from '@/lib/workouts';
+import { confirmAction } from '@/lib/confirm';
 import { font, radius, spacing, useTheme } from '@/theme';
 
 type CompleteResponse = { success: boolean; newAchievements?: string[] };
@@ -100,17 +101,17 @@ function WorkoutSession({ workout }: { workout: Workout }) {
       navigation.dispatch(data.action);
       return;
     }
-    Alert.alert('Sair do treino?', 'O que você registrou até agora não será salvo.', [
-      { text: 'Continuar treinando', style: 'cancel' },
-      {
-        text: 'Sair',
-        style: 'destructive',
-        onPress: () => {
-          leaving.current = true;
-          navigation.dispatch(data.action);
-        },
-      },
-    ]);
+    confirmAction({
+      title: 'Sair do treino?',
+      message: 'O que você registrou até agora não será salvo.',
+      confirmText: 'Sair',
+      cancelText: 'Continuar treinando',
+      destructive: true,
+    }).then((sair) => {
+      if (!sair) return;
+      leaving.current = true;
+      navigation.dispatch(data.action);
+    });
   });
 
   const left = useRef(false);

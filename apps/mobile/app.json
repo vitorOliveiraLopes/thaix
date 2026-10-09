@@ -37,6 +37,15 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/icon.png",
+      "name": "ThaixSkill",
+      "shortName": "ThaixSkill",
+      "themeColor": "#1A1A1A",
+      "backgroundColor": "#1A1A1A"
     }
   }
 }

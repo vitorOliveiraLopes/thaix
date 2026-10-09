@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 
 import { queryClient } from './query';
 import { supabase } from './supabase';
+import { setMonitoringUser } from './monitoring';
 
 type AuthResult = { error: string | null };
 
@@ -40,11 +41,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       setSession(data.session);
+      setMonitoringUser(data.session?.user.id ?? null);
       setLoading(false);
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
+      setMonitoringUser(next?.user.id ?? null);
       // Dados em cache são do aluno anterior: nunca mostrar para outra conta.
       if (event === 'SIGNED_OUT') queryClient.clear();
     });

@@ -58,6 +58,35 @@ instale (o Android pede para permitir "instalar apps desta fonte").
 - Mudança só em JavaScript exige um APK novo (ou EAS Update, quando configurarmos).
 - `production` gera o pacote para a Play Store (.aab); fica para o lançamento.
 
+## Versão web (mesmo código)
+
+O mesmo app roda no navegador (react-native-web). Diferenças ficam em
+arquivos `.web.tsx`/`.web.ts` ao lado do original (teclado, armazenamento da
+sessão, seletor de horário) e em `Platform.OS === 'web'` (vibração,
+confirmações, moldura centralizada no computador).
+
+Rodar localmente: `npx expo start --web` (abre em http://localhost:8081).
+
+### Publicar na Vercel (projeto separado da API)
+
+1. Na Vercel, **Add New → Project**, mesmo repositório, **Root Directory = `apps/mobile`**.
+   O `vercel.json` desta pasta já define build (`npx expo export -p web`), saída (`dist`) e as rotas.
+2. Variáveis do projeto: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`,
+   `EXPO_PUBLIC_API_URL` e, se quiser, `EXPO_PUBLIC_SENTRY_DSN`.
+3. No projeto **da API** (o Next, na raiz), adicione `WEB_APP_ORIGINS` com o endereço do
+   site (ex.: `https://thaix-app.vercel.app`). Sem isso o navegador bloqueia as chamadas
+   ao coach e à conclusão de treino (CORS).
+4. A redefinição de senha continua pela página `/reset-password` do projeto da API
+   (link do e-mail). Ao aposentar a web antiga, essa página precisa ficar.
+
+## Monitoramento de erros (Sentry)
+
+- **App (Android e web):** `EXPO_PUBLIC_SENTRY_DSN` no `.env.local`, no ambiente do EAS
+  (`eas env:create --environment preview --name EXPO_PUBLIC_SENTRY_DSN ...`) e no projeto web
+  da Vercel. Só liga fora do modo de desenvolvimento e envia apenas o id do aluno.
+- **API:** `SENTRY_DSN` no projeto da API na Vercel.
+- No Android, o Sentry é uma biblioteca nativa: precisa de um APK novo.
+
 ## Estrutura
 
 ```
