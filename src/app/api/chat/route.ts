@@ -21,6 +21,7 @@ import { callClaude, describeCoachError, type ContentBlock, type Message } from 
 import { describeSnapshot, loadSnapshot, saoPauloToday, type CoachCtx } from '@/lib/coach/context'
 import { COACH_SYSTEM_PROMPT, INJURY_HINT } from '@/lib/coach/prompt'
 import { buildDisplay, buildProposal, runReadTool } from '@/lib/coach/tools'
+import { reportServerError } from '@/lib/monitoring/server'
 
 // ─── Configuração ─────────────────────────────────────────────────────────────
 
@@ -264,6 +265,8 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const info = describeCoachError(err)
     console.error('[POST /api/chat]', info.code, err)
+    // Demanda alta da IA é passageira: não vira alerta.
+    if (info.code !== 'ai_busy') reportServerError(err, { route: 'chat', code: info.code })
     return NextResponse.json({ error: info.message, code: info.code }, { status: info.status })
   }
 }

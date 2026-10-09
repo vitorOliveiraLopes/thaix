@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { trialDaysLeft } from '@thaix/core';
 import { router } from 'expo-router';
-import { Alert, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Badge, Button, Card, Divider, ListRow, Screen, Txt } from '@/components/ui';
 import { useAccount } from '@/lib/account';
 import { useAuth } from '@/lib/auth';
 import { spacing, useTheme } from '@/theme';
+import { confirmAction } from '@/lib/confirm';
 
 export default function PerfilScreen() {
   const c = useTheme();
@@ -26,10 +27,14 @@ export default function PerfilScreen() {
           : { label: 'Sem plano', fg: c.muted, bg: c.surfaceMuted };
 
   function confirmSignOut() {
-    Alert.alert('Sair da conta?', 'Você vai precisar entrar de novo com e-mail e senha.', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Sair', style: 'destructive', onPress: () => signOut() },
-    ]);
+    confirmAction({
+      title: 'Sair da conta?',
+      message: 'Você vai precisar entrar de novo com e-mail e senha.',
+      confirmText: 'Sair',
+      destructive: true,
+    }).then((sair) => {
+      if (sair) signOut();
+    });
   }
 
   return (

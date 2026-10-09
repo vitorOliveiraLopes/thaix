@@ -13,6 +13,7 @@ import {
   type MultiSetExerciseGoal,
   type MultiSetExerciseResult,
 } from '@thaix/core'
+import { reportServerError } from '@/lib/monitoring/server'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -390,6 +391,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, newAchievements })
 
   } catch (err) {
+    reportServerError(err, { route: 'workouts/complete' })
     console.error('[complete] Unexpected error', {
       message: err instanceof Error ? err.message : String(err),
     })
