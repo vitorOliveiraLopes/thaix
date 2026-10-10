@@ -41,8 +41,10 @@ export class AnthropicError extends Error {
 export function describeCoachError(err: unknown): { code: string; message: string; status: number } {
   if (err instanceof AnthropicError) {
     const msg = err.message.toLowerCase()
-    if (err.status === 401 || err.status === 403)
+    if (err.status === 401)
       return { code: 'ai_auth', status: 503, message: 'O coach está sem acesso à IA (chave inválida no servidor). Avise o suporte.' }
+    if (err.status === 403)
+      return { code: 'ai_permission', status: 503, message: 'A chave da IA não tem permissão para este modelo ou workspace. Avise o suporte.' }
     if (msg.includes('credit balance') || msg.includes('billing'))
       return { code: 'ai_billing', status: 503, message: 'O coach está temporariamente sem créditos de IA. Avise o suporte.' }
     if (err.status === 404 || err.errorType === 'not_found_error')
@@ -58,13 +60,23 @@ export function describeCoachError(err: unknown): { code: string; message: strin
   return { code: 'internal', status: 500, message: 'O coach está indisponível agora. Tente em instantes.' }
 }
 
+/**
+ * Chave da Anthropic como está na Vercel, sem espaços, quebras de linha ou
+ * aspas coladas junto (erros comuns ao copiar e colar no painel).
+ */
+export function anthropicKey(raw = process.env.ANTHROPIC_API_KEY): string | null {
+  const key = (raw ?? '').trim().replace(/^['"]+|['"]+$/g, '').trim()
+  return key || null
+}
+
 export async function callClaude(
   staticPrompt: string,
   dynamicPrompt: string,
   messages: Message[],
   { allowTools = true, timeoutMs = 25_000 }: { allowTools?: boolean; timeoutMs?: number } = {},
 ): Promise<ClaudeResponse> {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error('missing_api_key')
+  const apiKey = anthropicKey()
+  if (!apiKey) throw new Error('missing_api_key')
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
@@ -73,7 +85,7 @@ export async function callClaude(
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({

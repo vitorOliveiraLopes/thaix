@@ -263,7 +263,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: reply, pendingActions: pending, attachments })
   } catch (err) {
     const info = describeCoachError(err)
-    console.error('[POST /api/chat]', info.code, err)
+    // Log com o motivo dado pela Anthropic (nunca a chave).
+    console.error('[POST /api/chat]', info.code, err instanceof Error ? err.message : err)
     return NextResponse.json({ error: info.message, code: info.code }, { status: info.status })
   }
 }
