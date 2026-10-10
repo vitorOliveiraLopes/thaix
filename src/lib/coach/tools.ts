@@ -5,12 +5,25 @@ import {
   EXERCISE_EFFORT_LABELS,
   MIN_TRAINING_DAYS,
   SESSION_MINUTES_OPTIONS,
+  LEVEL_LABELS,
   applyOps,
+  catalogTarget,
+  formatSetsTarget,
+  MAX_WORKOUT_EXERCISES,
+  levelIndex,
+  matchExercise,
+  normalizeText,
+  normalizeLevel,
+  planCustomWorkout,
+  previousLevel,
+  recommendExercises,
+  validateTarget,
   bestOfSets,
   boxRecommendation,
   estimateWorkoutMinutes,
   fitWorkoutToMinutes,
   initialSkillLevel,
+  isRestDay,
   isSkillId,
   lightenWorkout,
   sessionMetAllGoalsMultiSet,
@@ -22,10 +35,12 @@ import {
   type ChatAttachment,
   type CoachToolName,
   type PlanExercise,
+  type PlanItem,
   type WorkoutOp,
 } from '@thaix/core'
 
-import { daysAgo, loadSnapshot, loadTodayWorkouts, type CoachCtx, type TodayWorkout } from './context'
+import { daysAgo, loadSnapshot, loadTodayWorkouts, saoPauloToday, type CoachCtx, type TodayWorkout } from './context'
+import { loadCatalog, planGeneratedWorkout } from './generate'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Exibição: card nativo no chat, montado com os dados do banco (não do modelo)
@@ -77,6 +92,8 @@ export async function runReadTool(name: string, input: Json, ctx: CoachCtx): Pro
       return personalRecords(ctx, input.exercise as string | undefined)
     case 'get_box_log':
       return boxLog(ctx, Number(input.days ?? 7))
+    case 'recommend_exercises':
+      return recommend(ctx, input)
     default:
       return { error: `Ferramenta de leitura desconhecida: ${name}` }
   }
@@ -270,6 +287,52 @@ async function personalRecords(ctx: CoachCtx, exercise?: string) {
   return { records: list.slice(0, 20) }
 }
 
+const levelLabel = (level: string) => LEVEL_LABELS[normalizeLevel(level)]
+
+async function skillProgress(ctx: CoachCtx, skillId: string) {
+  const { data } = await ctx.client
+    .from('user_skill_progress')
+    .select('skill_id, level, week_number, sessions_at_current_level')
+    .eq('user_id', ctx.userId)
+    .eq('skill_id', skillId)
+    .maybeSingle()
+  return data as { skill_id: string; level: string; week_number: number; sessions_at_current_level: number } | null
+}
+
+async function recommend(ctx: CoachCtx, input: Json) {
+  const skillId = String(input.skill_id ?? '')
+  const progress = await skillProgress(ctx, skillId)
+  if (!progress) return { error: `${skillName(skillId)} não está nas trilhas do aluno.` }
+  const [catalog, { data: routine }, today] = await Promise.all([
+    loadCatalog(ctx, skillId),
+    ctx.client.from('onboarding_responses').select('equipment').eq('user_id', ctx.userId).maybeSingle(),
+    loadTodayWorkouts(ctx),
+  ])
+  // Fora do treino de hoje pelo id e pelo nome (o mesmo exercício existe em mais de um nível).
+  const todayNames = new Set(today.filter(w => w.skill_id === skillId).flatMap(w => w.items.map(i => normalizeText(i.exercise.exercise_name))))
+  const inToday = catalog.filter(e => todayNames.has(normalizeText(e.exercise_name))).map(e => e.id)
+  const list = recommendExercises(catalog, {
+    level: progress.level,
+    equipment: (routine?.equipment as string[] | null) ?? [],
+    exclude: inToday,
+    category: typeof input.category === 'string' ? input.category : null,
+    includeNextLevel: input.include_next_level === true,
+  })
+  return {
+    skill: skillName(skillId),
+    student_level: levelLabel(progress.level),
+    exercises: list.map(e => ({
+      name: e.exercise_name,
+      category: e.category,
+      level: levelLabel(e.level),
+      fit: e.fit,
+      target: formatSetsTarget(catalogTarget(e, progress.level, progress.week_number)),
+      note: e.note,
+    })),
+    note: list.length ? undefined : 'Nada novo para recomendar com esse filtro e o equipamento do aluno.',
+  }
+}
+
 async function boxLog(ctx: CoachCtx, days: number) {
   const { data } = await ctx.client
     .from('box_sessions')
@@ -371,6 +434,156 @@ export async function buildProposal(name: CoachToolName, input: Json, ctx: Coach
       }
     }
 
+    case 'add_exercise': {
+      const w = pickWorkout(await loadTodayWorkouts(ctx), input.skill_id)
+      if ('error' in w) return w
+      const progress = await skillProgress(ctx, w.skill_id)
+      if (!progress) return { error: `${skillName(w.skill_id)} não está nas trilhas do aluno.` }
+      const cur = levelIndex(progress.level)
+      const catalog = (await loadCatalog(ctx, w.skill_id)).sort(
+        (a, b) => Math.abs(levelIndex(a.level) - cur) - Math.abs(levelIndex(b.level) - cur),
+      )
+      const inWorkout = new Set(w.items.map(i => normalizeText(i.exercise.exercise_name)))
+      const allowed = catalog.filter(e => levelIndex(e.level) <= cur && !inWorkout.has(normalizeText(e.exercise_name)))
+      const { match, candidates } = matchExercise(allowed, String(input.exercise ?? ''))
+      if (!match) {
+        if (candidates.length) return { error: `Mais de um exercício com esse nome: ${candidates.map(c => c.exercise_name).join(', ')}. Pergunte qual.` }
+        if (matchExercise(catalog, String(input.exercise ?? '')).match)
+          return { error: 'Esse exercício já está no treino ou é de um nível acima do aluno.' }
+        return { error: `Não achei "${input.exercise}" no catálogo de ${skillName(w.skill_id)}. Use recommend_exercises para ver as opções.` }
+      }
+      const target = catalogTarget(match, progress.level, w.week_number)
+      const op: WorkoutOp = { type: 'add', skill_exercise_id: match.id, ...target }
+      const after = applyOps(w.items, [op], { [match.id]: match })
+      return {
+        summary: `Adicionar ${match.exercise_name} ao treino de ${skillName(w.skill_id)}`,
+        preview: [
+          `${match.exercise_name} (${formatSetsTarget(target)}) no fim do treino`,
+          `Duração estimada: ${estimateWorkoutMinutes(w.items)} → ${estimateWorkoutMinutes(after)} min`,
+        ],
+        payload: { ...opsPayload(w, [op]), exercises: { [match.id]: match } },
+      }
+    }
+
+    case 'remove_exercise': {
+      const found = resolveItem(await loadTodayWorkouts(ctx), String(input.exercise ?? ''))
+      if (!found) return { error: `Não encontrei "${input.exercise}" no treino pendente de hoje.` }
+      if (found.workout.items.length <= 1) return { error: 'É o único exercício do treino; não dá para tirar.' }
+      const op: WorkoutOp = { type: 'remove', order_index: found.item.order_index }
+      const after = applyOps(found.workout.items, [op])
+      return {
+        summary: `Tirar ${found.item.exercise.exercise_name} do treino`,
+        preview: [`Duração estimada: ${estimateWorkoutMinutes(found.workout.items)} → ${estimateWorkoutMinutes(after)} min`],
+        payload: opsPayload(found.workout, [op]),
+      }
+    }
+
+    case 'adjust_exercise': {
+      const found = resolveItem(await loadTodayWorkouts(ctx), String(input.exercise ?? ''))
+      if (!found) return { error: `Não encontrei "${input.exercise}" no treino pendente de hoje.` }
+      const target = validateTarget(found.item, input)
+      if ('error' in target) return target
+      const op: WorkoutOp = { type: 'set_target', order_index: found.item.order_index, ...target }
+      return {
+        summary: `Mudar a meta de ${found.item.exercise.exercise_name}`,
+        preview: [`${formatSetsTarget(found.item)} → ${formatSetsTarget(target)}`],
+        payload: opsPayload(found.workout, [op]),
+      }
+    }
+
+    case 'create_workout': {
+      const skillId = String(input.skill_id ?? '')
+      if (!isSkillId(skillId)) return { error: 'Skill inválida.' }
+      const progress = await skillProgress(ctx, skillId)
+      if (!progress) return { error: `${skillName(skillId)} não está nas trilhas do aluno. Use add_skill antes.` }
+      const snap = await loadSnapshot(ctx)
+      // Dia de treino sem treino gerado: a tela inicial monta as skills do dia.
+      // Criar um antes mudaria o plano do dia sem o aluno perceber.
+      if (snap.today.length === 0 && !isRestDay(snap.trainingDays, ctx.dow))
+        return { error: 'Hoje é dia de treino e o treino ainda não foi gerado: peça para o aluno abrir a tela inicial primeiro.' }
+      const existing = snap.today.find(w => w.skill_id === skillId)
+      if (existing)
+        return {
+          error: existing.completed
+            ? `O treino de ${skillName(skillId)} de hoje já foi concluído.`
+            : `Já existe um treino de ${skillName(skillId)} hoje. Para mudá-lo, use add_exercise, remove_exercise, swap_exercise ou adjust_exercise.`,
+        }
+      const minutes = Number.isInteger(input.minutes) ? Math.min(90, Math.max(10, Number(input.minutes))) : null
+      const names = Array.isArray(input.exercises) ? (input.exercises as unknown[]).map(String).filter(n => n.trim()) : []
+
+      let items: PlanItem[]
+      const custom = names.length > 0
+      if (custom) {
+        const plan = planCustomWorkout(await loadCatalog(ctx, skillId), names, { skillId, level: progress.level, weekNumber: progress.week_number })
+        const problems = [
+          ...plan.missing.map(n => `"${n}" não está no catálogo`),
+          ...plan.tooHard.map(n => `"${n}" é de um nível acima do aluno`),
+          ...plan.ambiguous.map(a => `"${a.query}" pode ser: ${a.options.join(', ')}`),
+        ]
+        if (problems.length) return { error: `${problems.join('; ')}. Use recommend_exercises para ver as opções.` }
+        items = plan.items.map((e, i) => ({ order_index: i + 1, skill_exercise_id: e.id, ...e.target, exercise: e }))
+        if (minutes) items = applyOps(items, fitWorkoutToMinutes(items, minutes).ops)
+      } else {
+        const plan = await planGeneratedWorkout(ctx, skillId, minutes)
+        if ('error' in plan) return plan
+        items = plan.items
+      }
+
+      return {
+        summary: `Criar treino de ${skillName(skillId)} para hoje`,
+        preview: [
+          ...items.map(i => `${i.exercise.exercise_name}: ${formatSetsTarget(i)}`),
+          `Cerca de ${estimateWorkoutMinutes(items)} min · ${levelLabel(progress.level)}, semana ${progress.week_number}`,
+          custom ? 'Treino personalizado: conta para a sequência, não para subir de nível.' : 'Montado pelo método: conta para subir de nível.',
+        ],
+        // Treino do método é refeito na confirmação; o personalizado guarda os itens.
+        payload: {
+          skill_id: skillId,
+          date: ctx.today,
+          custom,
+          minutes,
+          items: custom ? items.map(i => ({ skill_exercise_id: i.skill_exercise_id, sets: i.sets, reps: i.reps, time_sec: i.time_sec })) : [],
+        },
+      }
+    }
+
+    case 'remove_skill': {
+      const id = String(input.skill_id ?? '')
+      const snap = await loadSnapshot(ctx)
+      const progress = snap.skills.find(s => s.skill_id === id)
+      if (!progress) return { error: `${skillName(id)} não está nas trilhas do aluno.` }
+      if (snap.skills.length <= 1) return { error: 'É a única skill do aluno; é preciso manter pelo menos uma.' }
+      const pending = snap.today.some(w => w.skill_id === id && !w.completed)
+      return {
+        summary: `Tirar ${skillName(id)} das suas trilhas`,
+        preview: [
+          `Seu nível (${levelLabel(progress.level)}, semana ${progress.week_number}) fica guardado: se voltar, continua de onde parou.`,
+          ...(snap.focusSkill === id ? ['Ela deixa de ser a skill prioritária.'] : []),
+          ...(pending ? [`O treino de ${skillName(id)} de hoje sai da tela inicial.`] : []),
+          'O histórico de treinos continua salvo.',
+        ],
+        payload: { skill_id: id },
+      }
+    }
+
+    case 'change_skill_level': {
+      const id = String(input.skill_id ?? '')
+      if (input.direction !== 'down') return { error: 'Subir de nível só acontece pelo desempenho nos treinos.' }
+      const progress = await skillProgress(ctx, id)
+      if (!progress) return { error: `${skillName(id)} não está nas trilhas do aluno.` }
+      const prev = previousLevel(progress.level)
+      if (!prev) return { error: `${skillName(id)} já está no primeiro nível.` }
+      return {
+        summary: `Voltar ${skillName(id)} para o ${levelLabel(prev)}`,
+        preview: [
+          `Nível: ${levelLabel(progress.level)} → ${levelLabel(prev)}`,
+          'Para subir de novo, valem as mesmas regras de desempenho.',
+          'Se o treino dessa skill de hoje ainda não foi feito, ele é refeito no novo nível.',
+        ],
+        payload: { skill_id: id, from: progress.level },
+      }
+    }
+
     case 'update_routine': {
       const patch: Json = {}
       const lines: string[] = []
@@ -416,9 +629,19 @@ export async function buildProposal(name: CoachToolName, input: Json, ctx: Coach
       if (!isSkillId(id)) return { error: 'Skill inválida.' }
       const snap = await loadSnapshot(ctx)
       if (snap.skills.some(s => s.skill_id === id)) return { error: `${skillName(id)} já está nas trilhas do aluno.` }
-      const { data: ob } = await ctx.client.from('onboarding_responses').select('pushups, pullups').eq('user_id', ctx.userId).maybeSingle()
+      const [{ data: ob }, { data: paused }] = await Promise.all([
+        ctx.client.from('onboarding_responses').select('pushups, pullups').eq('user_id', ctx.userId).maybeSingle(),
+        // Sem a tabela (SQL da fase 3 não rodado), segue como skill nova.
+        ctx.client.from('user_skill_paused').select('level, week_number').eq('user_id', ctx.userId).eq('skill_id', id).maybeSingle(),
+      ])
+      if (paused)
+        return {
+          summary: `Trazer ${skillName(id)} de volta às suas trilhas`,
+          preview: [`Continua de onde parou: ${levelLabel(paused.level)}, semana ${paused.week_number}.`],
+          payload: { skill_id: id },
+        }
       const level = initialSkillLevel(ob?.pushups ?? 0, ob?.pullups ?? 0)
-      return { summary: `Adicionar ${skillName(id)} às suas trilhas`, preview: [`Começa no nível ${level}, semana 1.`], payload: { skill_id: id, level } }
+      return { summary: `Adicionar ${skillName(id)} às suas trilhas`, preview: [`Começa no ${levelLabel(level)}, semana 1.`], payload: { skill_id: id } }
     }
 
     case 'set_goal': {
@@ -525,11 +748,83 @@ async function applyWorkoutOps(ctx: CoachCtx, payload: any): Promise<ExecResult>
   const { error } = await ctx.client.rpc('coach_apply_workout_ops', { p_workout_id: w.id, p_ops: ops })
   if (error) return fail(`Não consegui ajustar o treino: ${error.message}`)
 
-  const after = applyOps(w.items, ops, payload.new_exercise ? { [payload.new_exercise.id]: payload.new_exercise } : {})
+  const exercises = { ...(payload.exercises ?? {}), ...(payload.new_exercise ? { [payload.new_exercise.id]: payload.new_exercise } : {}) }
+  const after = applyOps(w.items, ops, exercises)
   return ok(
     `Treino ajustado: ${after.length} exercícios, cerca de ${estimateWorkoutMinutes(after)} min. Como é um treino ajustado, ele conta para a sequência mas não para subir de nível. Bora! 💪`,
     ['today', 'workout'],
   )
+}
+
+type NewItem = { skill_exercise_id: string; sets: number; reps: number | null; time_sec: number | null }
+
+/** Cabeçalho + itens do treino de hoje; desfaz o cabeçalho se os itens falharem. */
+async function insertWorkout(ctx: CoachCtx, skillId: string, weekNumber: number, items: NewItem[], adjusted: boolean): Promise<string | null> {
+  const c = ctx.client
+  const { data: header, error } = await c
+    .from('daily_workouts')
+    .insert({ user_id: ctx.userId, skill_id: skillId, date: ctx.today, week_number: weekNumber, ...(adjusted ? { adjusted: true } : {}) })
+    .select('id')
+    .single()
+  if (error || !header) {
+    return error?.code === '23505' ? `Já existe um treino de ${skillName(skillId)} hoje.` : `Não consegui criar o treino: ${error?.message ?? 'erro'}`
+  }
+  const { error: itemsError } = await c.from('daily_workout_items').insert(
+    items.map((i, idx) => ({ daily_workout_id: header.id, skill_exercise_id: i.skill_exercise_id, order_index: idx + 1, sets: i.sets, reps: i.reps, time_sec: i.time_sec })),
+  )
+  if (itemsError) {
+    await c.from('daily_workouts').delete().eq('id', header.id)
+    return `Não consegui criar o treino: ${itemsError.message}`
+  }
+  return null
+}
+
+/**
+ * Grava o treino da proposta. O payload fica no banco até a confirmação e o
+ * aluno consegue editá-lo, então nada dele decide o que conta para subir de
+ * nível: o treino do método é refeito aqui, e o personalizado é sempre
+ * gravado como ajustado, com cada item conferido contra o catálogo.
+ */
+async function createWorkout(ctx: CoachCtx, payload: { skill_id?: unknown; date?: unknown; custom?: unknown; minutes?: unknown; items?: unknown }): Promise<ExecResult> {
+  const c = ctx.client
+  const skillId = String(payload.skill_id ?? '')
+  if (!isSkillId(skillId)) return fail('Skill inválida.')
+  // A data vem do aparelho: aceita só até 1 dia de diferença do servidor.
+  if (payload.date !== ctx.today || Math.abs(Date.parse(ctx.today) - Date.parse(saoPauloToday().today)) > 86_400_000)
+    return fail('Essa proposta era para outro dia. Peça de novo.')
+  const progress = await skillProgress(ctx, skillId)
+  if (!progress) return fail(`${skillName(skillId)} não está mais nas suas trilhas.`)
+
+  if (payload.custom !== true) {
+    const minutes = Number.isInteger(payload.minutes) ? Math.min(90, Math.max(10, Number(payload.minutes))) : null
+    const plan = await planGeneratedWorkout(ctx, skillId, minutes)
+    if ('error' in plan) return fail(plan.error)
+    const err = await insertWorkout(ctx, skillId, progress.week_number, plan.items, false)
+    return err ? fail(err) : ok(`Treino de ${skillName(skillId)} criado! Ele já está na tela inicial. Bora! 🔥`, ['today', 'workout', 'home'])
+  }
+
+  const items = (Array.isArray(payload.items) ? payload.items : []) as NewItem[]
+  const ids = items.map(i => String(i?.skill_exercise_id))
+  if (items.length === 0 || items.length > MAX_WORKOUT_EXERCISES || new Set(ids).size !== ids.length) return fail('Treino inválido. Peça de novo.')
+  const { data: exs } = await c.from('skill_exercises').select('id, skill_id, level, reps, time_sec').in('id', ids)
+  const byId = new Map(((exs ?? []) as { id: string; skill_id: string; level: string; reps: number | null; time_sec: number | null }[]).map(e => [e.id, e]))
+  const int = (v: unknown, lo: number, hi: number) => Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi
+  const valid = items.every(i => {
+    const e = byId.get(i.skill_exercise_id)
+    return (
+      !!e &&
+      e.skill_id === skillId &&
+      levelIndex(e.level) <= levelIndex(progress.level) &&
+      int(i.sets, 1, 6) &&
+      // Mesmo tipo do catálogo: por repetição ou por tempo.
+      (e.reps === null ? i.reps === null : int(i.reps, 1, 30)) &&
+      (e.time_sec === null ? i.time_sec === null : int(i.time_sec, 5, 300))
+    )
+  })
+  if (!valid) return fail('O treino tem exercícios que não valem para você. Peça de novo.')
+
+  const err = await insertWorkout(ctx, skillId, progress.week_number, items, true)
+  return err ? fail(err) : ok(`Treino de ${skillName(skillId)} criado! Ele já está na tela inicial. Bora! 🔥`, ['today', 'workout', 'home'])
 }
 
 export async function executeProposal(name: string, payload: any, ctx: CoachCtx): Promise<ExecResult> {
@@ -538,7 +833,42 @@ export async function executeProposal(name: string, payload: any, ctx: CoachCtx)
     case 'fit_workout_to_time':
     case 'lighten_workout':
     case 'swap_exercise':
+    case 'add_exercise':
+    case 'remove_exercise':
+    case 'adjust_exercise':
       return applyWorkoutOps(ctx, payload)
+
+    case 'create_workout':
+      return createWorkout(ctx, payload)
+
+    case 'remove_skill': {
+      if (!isSkillId(String(payload.skill_id))) return fail('Skill inválida.')
+      const { error } = await c.rpc('coach_manage_skill', { p_skill_id: payload.skill_id, p_action: 'remove' })
+      if (error) return fail(`Não consegui tirar a skill: ${error.message}`)
+      // Lista exibida nas telas de rotina (o gerador usa user_skill_progress).
+      const { data: ob } = await c.from('onboarding_responses').select('skills').eq('user_id', ctx.userId).maybeSingle()
+      if (Array.isArray(ob?.skills)) {
+        await c.from('onboarding_responses').update({ skills: (ob.skills as string[]).filter(s => s !== payload.skill_id) }).eq('user_id', ctx.userId)
+      }
+      return ok(`${skillName(payload.skill_id)} saiu das suas trilhas. O nível ficou guardado se quiser voltar.`, ['skills', 'routine', 'today', 'progress', 'home'])
+    }
+
+    case 'change_skill_level': {
+      if (!isSkillId(String(payload.skill_id))) return fail('Skill inválida.')
+      const progress = await skillProgress(ctx, payload.skill_id)
+      if (!progress || progress.level !== payload.from) return fail('O nível mudou desde a proposta. Peça de novo.')
+      const hadPending = (await loadTodayWorkouts(ctx)).some(w => w.skill_id === payload.skill_id && !w.completed)
+      const { data, error } = await c.rpc('coach_manage_skill', { p_skill_id: payload.skill_id, p_action: 'level_down' })
+      if (error) return fail(`Não consegui mudar o nível: ${error.message}`)
+      let note = ''
+      // O banco tirou o treino pendente de hoje; refaz no nível novo.
+      if (hadPending) {
+        const plan = await planGeneratedWorkout(ctx, payload.skill_id, null)
+        const err = 'error' in plan ? plan.error : await insertWorkout(ctx, payload.skill_id, plan.weekNumber, plan.items, false)
+        note = err ? ' Abra a tela inicial para gerar o treino de hoje.' : ' O treino de hoje já está no nível novo.'
+      }
+      return ok(`${skillName(payload.skill_id)} agora está no ${levelLabel(String(data))}.${note} Técnica primeiro, o resto vem! 💪`, ['skills', 'today', 'workout', 'progress', 'home'])
+    }
 
     case 'update_routine': {
       // Só as colunas da rotina, mesmo que o payload tenha sido alterado.
@@ -559,17 +889,23 @@ export async function executeProposal(name: string, payload: any, ctx: CoachCtx)
 
     case 'add_skill': {
       if (!isSkillId(String(payload.skill_id))) return fail('Skill inválida.')
-      const { data: ob0 } = await c.from('onboarding_responses').select('pushups, pullups').eq('user_id', ctx.userId).maybeSingle()
-      payload.level = initialSkillLevel(ob0?.pushups ?? 0, ob0?.pullups ?? 0)
-      const { error } = await c.from('user_skill_progress').insert({
-        user_id: ctx.userId,
-        skill_id: payload.skill_id,
-        level: payload.level,
-        week_number: 1,
-        sessions_at_current_level: 0,
-        updated_at: new Date().toISOString(),
-      })
-      if (error) return fail(`Não consegui adicionar a skill: ${error.message}`)
+      const { data: paused } = await c.from('user_skill_paused').select('skill_id').eq('user_id', ctx.userId).eq('skill_id', payload.skill_id).maybeSingle()
+      if (paused) {
+        // Nível guardado ao tirar a skill: só o banco restaura (o aluno não grava essa tabela).
+        const { error } = await c.rpc('coach_manage_skill', { p_skill_id: payload.skill_id, p_action: 'restore' })
+        if (error) return fail(`Não consegui trazer a skill de volta: ${error.message}`)
+      } else {
+        const { data: ob0 } = await c.from('onboarding_responses').select('pushups, pullups').eq('user_id', ctx.userId).maybeSingle()
+        const { error } = await c.from('user_skill_progress').insert({
+          user_id: ctx.userId,
+          skill_id: payload.skill_id,
+          level: initialSkillLevel(ob0?.pushups ?? 0, ob0?.pullups ?? 0),
+          week_number: 1,
+          sessions_at_current_level: 0,
+          updated_at: new Date().toISOString(),
+        })
+        if (error) return fail(`Não consegui adicionar a skill: ${error.message}`)
+      }
       // Mantém a lista do onboarding em dia (é ela que aparece nas telas de rotina).
       const { data: ob } = await c.from('onboarding_responses').select('skills').eq('user_id', ctx.userId).maybeSingle()
       const skills = [...new Set([...((ob?.skills as string[]) ?? []), payload.skill_id])]

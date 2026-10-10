@@ -83,6 +83,22 @@ export const COACH_TOOLS = [
     description: 'Treinos da box registrados nos últimos dias (tipo, intensidade, estímulo). Use para avaliar fadiga antes de recomendar o treino de skill.',
     input_schema: { type: 'object', properties: { days: { type: 'integer', minimum: 1, maximum: 14, description: 'Janela em dias (padrão 7)' } } },
   },
+  {
+    name: 'recommend_exercises',
+    kind: 'read',
+    description:
+      'Exercícios do catálogo da Thaís para a skill, no nível do aluno e um abaixo, compatíveis com o equipamento dele e fora do treino de hoje. ' +
+      'Use para recomendar exercícios ou antes de add_exercise/create_workout com exercícios escolhidos. include_next_level mostra o próximo nível só para o aluno conhecer.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        skill_id: skillId,
+        category: { type: 'string', enum: ['mobilidade', 'core', 'forca', 'skill'], description: 'Filtrar por categoria (opcional)' },
+        include_next_level: { type: 'boolean' },
+      },
+      required: ['skill_id'],
+    },
+  },
 
   // ─── Ajustes no treino de hoje ─────────────────────────────────────────────
   {
@@ -130,6 +146,60 @@ export const COACH_TOOLS = [
     },
   },
 
+  {
+    name: 'add_exercise',
+    kind: 'write',
+    description:
+      'Adiciona um exercício do catálogo ao fim do treino de hoje (mesma skill, nível do aluno ou abaixo), com a meta do catálogo. O treino passa a contar como ajustado.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        exercise: { type: 'string', description: 'Nome do exercício no catálogo (use recommend_exercises para ver as opções)' },
+        skill_id: { ...skillId, description: 'Skill do treino que recebe o exercício, quando houver mais de um treino hoje' },
+      },
+      required: ['exercise'],
+    },
+  },
+  {
+    name: 'remove_exercise',
+    kind: 'write',
+    description: 'Tira um exercício do treino de hoje a pedido do aluno. O treino não pode ficar vazio e passa a contar como ajustado.',
+    input_schema: { type: 'object', properties: { exercise: exerciseRef }, required: ['exercise'] },
+  },
+  {
+    name: 'adjust_exercise',
+    kind: 'write',
+    description:
+      'Muda a meta de um exercício do treino de hoje (séries 1–6; reps 1–30 ou tempo 5–300 s, conforme o tipo do exercício). Só quando o aluno pedir um número. O treino passa a contar como ajustado.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        exercise: exerciseRef,
+        sets: { type: 'integer', minimum: 1, maximum: 6 },
+        reps: { type: 'integer', minimum: 1, maximum: 30 },
+        time_sec: { type: 'integer', minimum: 5, maximum: 300 },
+      },
+      required: ['exercise'],
+    },
+  },
+  {
+    name: 'create_workout',
+    kind: 'write',
+    description:
+      'Cria um treino de HOJE para uma skill que ainda não tem treino hoje (dia de descanso ou treino extra). ' +
+      'Sem "exercises": o app monta pelo método (nível, semana, equipamento) e o treino conta para a progressão. ' +
+      'Com "exercises": usa esses exercícios do catálogo (nível do aluno ou abaixo) e conta como ajustado. "minutes" encaixa no tempo.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        skill_id: skillId,
+        exercises: { type: 'array', items: { type: 'string' }, maxItems: 10, description: 'Nomes do catálogo, na ordem do treino (opcional)' },
+        minutes: { type: 'integer', minimum: 10, maximum: 90 },
+      },
+      required: ['skill_id'],
+    },
+  },
+
   // ─── Rotina ────────────────────────────────────────────────────────────────
   {
     name: 'update_routine',
@@ -157,8 +227,27 @@ export const COACH_TOOLS = [
   {
     name: 'add_skill',
     kind: 'write',
-    description: 'Adiciona uma skill nova às trilhas do aluno, começando no nível indicado pelo teste físico.',
+    description:
+      'Adiciona uma skill às trilhas do aluno. Se ele já treinou essa skill e a removeu, volta do nível em que parou; senão começa no nível do teste físico.',
     input_schema: { type: 'object', properties: { skill_id: skillId }, required: ['skill_id'] },
+  },
+  {
+    name: 'remove_skill',
+    kind: 'write',
+    description:
+      'Tira uma skill das trilhas do aluno (ele precisa ficar com pelo menos uma). O nível fica guardado: se adicionar de novo, continua de onde parou. O treino pendente de hoje dessa skill é descartado.',
+    input_schema: { type: 'object', properties: { skill_id: skillId }, required: ['skill_id'] },
+  },
+  {
+    name: 'change_skill_level',
+    kind: 'write',
+    description:
+      'Volta a skill um nível (ex.: está pesado demais, voltando de lesão). Subir de nível só acontece pelo desempenho nos treinos; não há como subir por aqui. O treino pendente de hoje dessa skill é refeito no novo nível.',
+    input_schema: {
+      type: 'object',
+      properties: { skill_id: skillId, direction: { type: 'string', enum: ['down'] } },
+      required: ['skill_id', 'direction'],
+    },
   },
   {
     name: 'set_goal',
