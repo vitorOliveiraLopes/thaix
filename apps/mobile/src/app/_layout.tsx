@@ -92,6 +92,9 @@ function RootNavigator() {
           headerBackButtonDisplayMode: 'minimal',
         }}
       >
+        {/* Link do e-mail de nova senha: abre logado ou não. */}
+        <Stack.Screen name="redefinir-senha" />
+
         <Stack.Protected guard={!loggedIn}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>

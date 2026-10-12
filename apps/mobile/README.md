@@ -72,12 +72,14 @@ Rodar localmente: `npx expo start --web` (abre em http://localhost:8081).
 1. Na Vercel, **Add New → Project**, mesmo repositório, **Root Directory = `apps/mobile`**.
    O `vercel.json` desta pasta já define build (`npx expo export -p web`), saída (`dist`) e as rotas.
 2. Variáveis do projeto: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`,
-   `EXPO_PUBLIC_API_URL` e, se quiser, `EXPO_PUBLIC_SENTRY_DSN`.
-3. No projeto **da API** (o Next, na raiz), adicione `WEB_APP_ORIGINS` com o endereço do
+   `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_WEB_URL` (o endereço do próprio site) e, se quiser,
+   `EXPO_PUBLIC_SENTRY_DSN`.
+3. No projeto **da API** (`apps/api`), adicione `WEB_APP_ORIGINS` com o endereço do
    site (ex.: `https://thaix-app.vercel.app`). Sem isso o navegador bloqueia as chamadas
    ao coach e à conclusão de treino (CORS).
-4. A redefinição de senha continua pela página `/reset-password` do projeto da API
-   (link do e-mail). Ao aposentar a web antiga, essa página precisa ficar.
+4. A nova senha é feita no próprio app (tela `/redefinir-senha`, no Android e na web).
+   O link do e-mail aponta para `EXPO_PUBLIC_WEB_URL` + `/redefinir-senha`: cadastre esse
+   endereço (e `/login`) em **Supabase → Authentication → URL Configuration → Redirect URLs**.
 
 ## Monitoramento de erros (Sentry)
 
@@ -120,5 +122,5 @@ Regras de negócio não ficam aqui: ficam no `packages/core`, com testes (`npm t
 - **Sessão no Keychain/Keystore** (`expo-secure-store`), dividida em pedaços por causa do limite de tamanho.
 - **API com o token do aluno:** `src/lib/api.ts` envia `Authorization: Bearer`; a API roda tudo sob RLS.
 - **Datas locais:** "hoje" é calculado no fuso do aparelho (`toLocalISODate`), não em UTC.
-- **Fora dos workspaces da raiz:** a raiz ainda é o Next com outra versão do React. O core entra por
+- **Fora dos workspaces da raiz:** o React Native fixa versões próprias de React. O core entra por
   link `file:` e o `metro.config.js` observa a pasta dele.
