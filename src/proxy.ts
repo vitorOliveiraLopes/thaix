@@ -71,7 +71,14 @@ function apiCors(request: NextRequest): NextResponse {
   const origin = request.headers.get('origin')
   const allowed = origin !== null && allowedOrigins().includes(origin)
   if (request.method === 'OPTIONS') {
-    return allowed ? new NextResponse(null, { status: 204, headers: corsHeaders(origin) }) : new NextResponse(null, { status: 403 })
+    if (allowed) return new NextResponse(null, { status: 204, headers: corsHeaders(origin) })
+    // Aparece nos logs da Vercel e na aba Network: mostra exatamente qual
+    // domínio falta em WEB_APP_ORIGINS (sem expor a lista configurada).
+    console.warn('[cors] origem recusada', { origin, configured: allowedOrigins().length })
+    return new NextResponse(`CORS: origem não liberada (${origin ?? 'sem Origin'}). Inclua em WEB_APP_ORIGINS no projeto da API.`, {
+      status: 403,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    })
   }
   const response = NextResponse.next()
   if (allowed) for (const [k, v] of Object.entries(corsHeaders(origin))) response.headers.set(k, v)
