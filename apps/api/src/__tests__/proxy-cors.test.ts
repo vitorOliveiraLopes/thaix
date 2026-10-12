@@ -25,6 +25,7 @@ describe('CORS da API para o app web', () => {
     vi.stubEnv('NODE_ENV', 'production')
     const res = await proxy(req('OPTIONS', 'https://malicioso.com'))
     expect(res.status).toBe(403)
+    expect(await res.text()).toContain('https://malicioso.com')
     const post = await proxy(req('POST', 'https://malicioso.com'))
     expect(post.headers.get('access-control-allow-origin')).toBeNull()
   })
