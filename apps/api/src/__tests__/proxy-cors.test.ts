@@ -15,6 +15,9 @@ describe('CORS da API para o app web', () => {
     expect(res.status).toBe(204)
     expect(res.headers.get('access-control-allow-origin')).toBe('https://outro.app')
     expect(res.headers.get('access-control-allow-headers')).toContain('Authorization')
+    // Cabeçalhos do Sentry do app web não podem derrubar a chamada.
+    expect(res.headers.get('access-control-allow-headers')).toContain('sentry-trace')
+    expect(res.headers.get('access-control-allow-headers')).toContain('baggage')
   })
 
   it('recusa domínio que não está na lista', async () => {
