@@ -2,7 +2,7 @@
  * ThaixSkill — Regras de negócio puras
  *
  * Funções sem I/O (sem Supabase, sem fetch) usadas por
- * apps/api (route de conclusão), pelo gerador em ./generator.ts e pelo app.
+ * API do app (rota de conclusão), pelo gerador em ./generator.ts e pelo app.
  * Testadas isoladamente em ./__tests__/business-rules.test.ts.
  */
 

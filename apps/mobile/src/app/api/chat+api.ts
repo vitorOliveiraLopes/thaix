@@ -1,4 +1,3 @@
-import { NextRequest, NextResponse } from 'next/server'
 import {
   EMERGENCY_REPLY,
   OFF_TOPIC_REPLY,
@@ -16,17 +15,14 @@ import {
   type TimelineAction,
 } from '@thaix/core'
 
-import { getRouteClient } from '@/lib/supabase/route-client'
-import { callClaude, describeCoachError, type ContentBlock, type Message } from '@/lib/coach/anthropic'
-import { describeSnapshot, loadSnapshot, saoPauloToday, type CoachCtx } from '@/lib/coach/context'
-import { COACH_SYSTEM_PROMPT, INJURY_HINT } from '@/lib/coach/prompt'
-import { buildDisplay, buildProposal, runReadTool } from '@/lib/coach/tools'
-import { reportServerError } from '@/lib/monitoring/server'
+import { getRouteClient } from '@/server/auth'
+import { callClaude, describeCoachError, type ContentBlock, type Message } from '@/server/coach/anthropic'
+import { describeSnapshot, loadSnapshot, saoPauloToday, type CoachCtx } from '@/server/coach/context'
+import { COACH_SYSTEM_PROMPT, INJURY_HINT } from '@/server/coach/prompt'
+import { buildDisplay, buildProposal, runReadTool } from '@/server/coach/tools'
+import { reportServerError } from '@/server/monitoring'
 
 // ─── Configuração ─────────────────────────────────────────────────────────────
-
-/** Limite da função na Vercel (o loop de ferramentas pode levar várias chamadas). */
-export const maxDuration = 60
 
 /** Mensagens do aluno por dia. Controla custo; ajustável sem deploy de código. */
 const DAILY_LIMIT = Number(process.env.COACH_DAILY_LIMIT ?? 40)
@@ -72,14 +68,14 @@ async function saveAssistant(ctx: CoachCtx, content: string, attachments: ChatAt
 
 // ─── POST /api/chat ───────────────────────────────────────────────────────────
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
     const { client, user } = await getRouteClient(req)
-    if (!client || !user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    if (!client || !user) return Response.json({ error: 'Não autenticado' }, { status: 401 })
 
     const body = await req.json().catch(() => null)
     const message = typeof body?.message === 'string' ? body.message.trim().slice(0, 1000) : ''
-    if (!message) return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 })
+    if (!message) return Response.json({ error: 'Mensagem vazia' }, { status: 400 })
 
     const ctx: CoachCtx = { client, userId: user.id, ...resolveDate(body) }
 
@@ -93,7 +89,7 @@ export async function POST(req: NextRequest) {
       .gte('created_at', since)
     if (countError) console.error('[coach] quota check failed', countError.message)
     if ((count ?? 0) >= DAILY_LIMIT) {
-      return NextResponse.json(
+      return Response.json(
         { error: `Você chegou ao limite de ${DAILY_LIMIT} mensagens por dia. Daqui a pouco a gente continua! 💪` },
         { status: 429 },
       )
@@ -105,7 +101,7 @@ export async function POST(req: NextRequest) {
     const concern = detectHealthConcern(message)
     if (concern === 'emergency') {
       await saveAssistant(ctx, EMERGENCY_REPLY)
-      return NextResponse.json({ message: EMERGENCY_REPLY, pendingActions: [] })
+      return Response.json({ message: EMERGENCY_REPLY, pendingActions: [] })
     }
 
     // 2b. Fora do escopo óbvio (comida, clima, notícias…): resposta fixa, sem IA.
@@ -114,7 +110,7 @@ export async function POST(req: NextRequest) {
       const reply = OFF_TOPIC_REPLY[offTopic]
       await saveAssistant(ctx, reply)
       console.info('[coach] off_topic', { user: user.id, kind: offTopic })
-      return NextResponse.json({ message: reply, pendingActions: [] })
+      return Response.json({ message: reply, pendingActions: [] })
     }
 
     // 3. Histórico + contexto do aluno
@@ -261,12 +257,12 @@ export async function POST(req: NextRequest) {
     console.info('[coach] done', { user: user.id, ms: Date.now() - started, proposals: pending.length, cards: attachments.length })
     await saveAssistant(ctx, reply, attachments)
 
-    return NextResponse.json({ message: reply, pendingActions: pending, attachments })
+    return Response.json({ message: reply, pendingActions: pending, attachments })
   } catch (err) {
     const info = describeCoachError(err)
     console.error('[POST /api/chat]', info.code, err)
     // Demanda alta da IA é passageira: não vira alerta.
-    if (info.code !== 'ai_busy') reportServerError(err, { route: 'chat', code: info.code })
-    return NextResponse.json({ error: info.message, code: info.code }, { status: info.status })
+    if (info.code !== 'ai_busy') await reportServerError(err, { route: 'chat', code: info.code })
+    return Response.json({ error: info.message, code: info.code }, { status: info.status })
   }
 }

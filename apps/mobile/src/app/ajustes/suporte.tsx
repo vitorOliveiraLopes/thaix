@@ -4,9 +4,8 @@ import { View } from 'react-native';
 
 import { Card, Divider, ListRow, Screen, Txt } from '@/components/ui';
 import { openWhatsApp } from '@/lib/settings';
+import { siteUrl } from '@/lib/site';
 import { spacing } from '@/theme';
-
-const WEB = (process.env.EXPO_PUBLIC_API_URL ?? 'https://thaix.vercel.app').replace(/\/+$/, '');
 
 export default function SuporteScreen() {
   return (
@@ -14,9 +13,9 @@ export default function SuporteScreen() {
       <Card padded={false}>
         <ListRow emoji="💬" title="Falar com o suporte" subtitle="Atendimento pelo WhatsApp" onPress={() => openWhatsApp('Olá! Preciso de ajuda com o app ThaixSkill.')} />
         <Divider />
-        <ListRow icon="document-text-outline" title="Termos de uso" onPress={() => WebBrowser.openBrowserAsync(`${WEB}/termos`)} />
+        <ListRow icon="document-text-outline" title="Termos de uso" onPress={() => WebBrowser.openBrowserAsync(`${siteUrl()}/termos`)} />
         <Divider />
-        <ListRow icon="shield-checkmark-outline" title="Política de privacidade" onPress={() => WebBrowser.openBrowserAsync(`${WEB}/privacidade`)} />
+        <ListRow icon="shield-checkmark-outline" title="Política de privacidade" onPress={() => WebBrowser.openBrowserAsync(`${siteUrl()}/privacidade`)} />
       </Card>
       <View style={{ alignItems: 'center', gap: spacing.xs }}>
         <Txt variant="small" color="muted">

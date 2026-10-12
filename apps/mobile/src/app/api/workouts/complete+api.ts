@@ -1,5 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getRouteClient } from '@/lib/supabase/route-client'
+import { getRouteClient } from '@/server/auth'
 import {
   sessionMetAllGoalsMultiSet,
   shouldProgressLevel,
@@ -13,7 +12,7 @@ import {
   type MultiSetExerciseGoal,
   type MultiSetExerciseResult,
 } from '@thaix/core'
-import { reportServerError } from '@/lib/monitoring/server'
+import { reportServerError } from '@/server/monitoring'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -34,12 +33,6 @@ type RequestBody = {
   workoutId: string
   results: WorkoutResult[]
 }
-
-// ─── Clientes Supabase ────────────────────────────────────────────────────────
-
-
-// SERVICE_ROLE_KEY não necessária — usando sessão do usuário via RLS
-type AdminClient = any
 
 // ─── Lógica de negócio (I/O) ──────────────────────────────────────────────────
 //
@@ -318,7 +311,7 @@ async function evaluateAchievements(
 
 // ─── POST /api/workouts/complete ─────────────────────────────────────────────
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
     // ── Passo 1: autenticação (Bearer do app ou cookie da web) ───────────────
     const { client: authClient, user } = await getRouteClient(req)
@@ -327,17 +320,17 @@ export async function POST(req: NextRequest) {
       console.error('[complete] Auth failed', {
         hasBearer: req.headers.get('authorization')?.toLowerCase().startsWith('bearer ') ?? false,
       })
-      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+      return Response.json({ error: 'Não autenticado' }, { status: 401 })
     }
 
     // ── Passo 2: validar body ────────────────────────────────────────────────
     let body: RequestBody
     try { body = await req.json() }
-    catch { return NextResponse.json({ error: 'Body inválido' }, { status: 400 }) }
+    catch { return Response.json({ error: 'Body inválido' }, { status: 400 }) }
 
     const { workoutId, results } = body
     if (!workoutId || !Array.isArray(results) || results.length === 0) {
-      return NextResponse.json(
+      return Response.json(
         { error: 'workoutId e results são obrigatórios' },
         { status: 400 }
       )
@@ -356,7 +349,7 @@ export async function POST(req: NextRequest) {
         sessionUserId: user.id,
         dbError:       ownershipError?.message ?? null,
       })
-      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
+      return Response.json({ error: 'Acesso negado' }, { status: 403 })
     }
 
     // ── Passo 4: normalizar resultados (melhor série calculada uma vez,
@@ -388,14 +381,14 @@ export async function POST(req: NextRequest) {
 
     const newAchievements = await evaluateAchievements(admin, user.id, workoutId, skillId)
 
-    return NextResponse.json({ success: true, newAchievements })
+    return Response.json({ success: true, newAchievements })
 
   } catch (err) {
-    reportServerError(err, { route: 'workouts/complete' })
+    await reportServerError(err, { route: 'workouts/complete' })
     console.error('[complete] Unexpected error', {
       message: err instanceof Error ? err.message : String(err),
     })
-    return NextResponse.json(
+    return Response.json(
       { error: err instanceof Error ? err.message : 'Erro interno' },
       { status: 500 }
     )

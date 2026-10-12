@@ -2,16 +2,13 @@
   "name": "thaix",
   "version": "0.1.0",
   "private": true,
-  "description": "Monorepo do ThaixSkill: apps/api (Next, Vercel), apps/mobile (Expo: Android e web, fora dos workspaces) e packages/core (regras).",
+  "description": "Monorepo do ThaixSkill: apps/mobile (Expo: Android, web e API na Vercel, fora dos workspaces) e packages/core (regras).",
   "workspaces": [
-    "packages/*",
-    "apps/api"
+    "packages/*"
   ],
   "scripts": {
-    "dev:api": "npm run dev -w @thaix/api",
-    "build:api": "npm run build -w @thaix/api",
     "test": "vitest run",
-    "typecheck": "npm run typecheck -w @thaix/core -w @thaix/api"
+    "typecheck": "npm run typecheck -w @thaix/core && npm --prefix apps/mobile run typecheck"
   },
   "devDependencies": {
     "typescript": "^5",

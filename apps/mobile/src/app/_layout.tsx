@@ -2,7 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, type Theme } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { KeyboardProvider } from '@/lib/keyboard';
 
@@ -152,7 +152,20 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
   return <ErrorView message="Algo deu errado nesta tela. Tente de novo." onRetry={() => void retry()} />;
 }
 
+/**
+ * Web: o HTML de cada página é gerado no build, sem navegador. A sessão, o
+ * endereço da página e o tamanho da tela só existem no navegador, então o
+ * app só desenha depois de carregar nele (como um app de página única).
+ */
+const noSubscribe = () => () => {};
+function useHydrated() {
+  // false no build e na hidratação; true logo depois, já no navegador.
+  return useSyncExternalStore(noSubscribe, () => true, () => false);
+}
+
 function RootLayout() {
+  const hydrated = useHydrated();
+  if (!hydrated) return null;
   return (
     <KeyboardProvider>
       <QueryClientProvider client={queryClient}>

@@ -1,18 +1,14 @@
 import * as Linking from 'expo-linking';
-import { Platform } from 'react-native';
 
-const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL ?? '').replace(/\/+$/, '');
+import { siteUrl } from './site';
 
 /**
- * Para onde o link do e-mail (nova senha, confirmação de cadastro) leva.
- *
- * - Na web: o próprio site.
- * - No Android: o site (EXPO_PUBLIC_WEB_URL), que abre em qualquer aparelho,
- *   inclusive se o e-mail for aberto no computador. Sem ele configurado, o
- *   link do app (thaixskill://), que só funciona no celular com o app.
+ * Para onde o link do e-mail (nova senha, confirmação de cadastro) leva: o
+ * site, que abre em qualquer aparelho, inclusive se o e-mail for aberto no
+ * computador. Sem o endereço do site configurado (desenvolvimento no
+ * Android), o link do app (thaixskill://), que só funciona no celular.
  */
 export function authRedirectUrl(path: string): string {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') return `${window.location.origin}${path}`;
-  if (WEB_URL) return `${WEB_URL}${path}`;
-  return Linking.createURL(path);
+  const site = siteUrl();
+  return site ? `${site}${path}` : Linking.createURL(path);
 }

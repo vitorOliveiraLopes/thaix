@@ -23,7 +23,12 @@
       "package": "com.thaixskill.app"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "sitemap": false
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -40,7 +45,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "single",
+      "output": "server",
       "favicon": "./assets/images/icon.png",
       "name": "ThaixSkill",
       "shortName": "ThaixSkill",

@@ -259,7 +259,7 @@ describe('grupos musculares na força', () => {
   })
 
   it('sem grupo cadastrado, não mexe na ordem', () => {
-    const list = [{ id: 'a' }, { id: 'b' }]
+    const list: { id: string; muscle_group?: string | null }[] = [{ id: 'a' }, { id: 'b' }]
     expect(diversifyByMuscleGroup(list)).toBe(list)
   })
 })

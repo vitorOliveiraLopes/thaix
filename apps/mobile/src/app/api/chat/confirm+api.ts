@@ -1,26 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server'
 
-import { getRouteClient } from '@/lib/supabase/route-client'
+import { getRouteClient } from '@/server/auth'
 import { PROPOSAL_TTL_MS } from '@thaix/core'
 
-import { saoPauloToday, type CoachCtx } from '@/lib/coach/context'
-import { executeProposal } from '@/lib/coach/tools'
-import { reportServerError } from '@/lib/monitoring/server'
+import { saoPauloToday, type CoachCtx } from '@/server/coach/context'
+import { executeProposal } from '@/server/coach/tools'
+import { reportServerError } from '@/server/monitoring'
 
 // ─── POST /api/chat/confirm ───────────────────────────────────────────────────
 //
 // Único ponto que grava uma ação proposta pelo coach, e só depois que o
 // aluno toca em Confirmar. Tudo roda com o token do aluno (RLS).
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
     const { client, user } = await getRouteClient(req)
-    if (!client || !user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    if (!client || !user) return Response.json({ error: 'Não autenticado' }, { status: 401 })
 
     const body = await req.json().catch(() => null)
     const actionId: string | undefined = body?.actionId
     const confirmed = body?.confirmed === true
-    if (!actionId) return NextResponse.json({ error: 'actionId é obrigatório' }, { status: 400 })
+    if (!actionId) return Response.json({ error: 'actionId é obrigatório' }, { status: 400 })
 
     const { data: action } = await client
       .from('chat_pending_actions')
@@ -29,8 +28,8 @@ export async function POST(req: NextRequest) {
       .eq('user_id', user.id)
       .maybeSingle()
 
-    if (!action) return NextResponse.json({ error: 'Ação não encontrada' }, { status: 404 })
-    if (action.status !== 'pending') return NextResponse.json({ error: 'Esta ação já foi resolvida' }, { status: 409 })
+    if (!action) return Response.json({ error: 'Ação não encontrada' }, { status: 404 })
+    if (action.status !== 'pending') return Response.json({ error: 'Esta ação já foi resolvida' }, { status: 409 })
 
     // Marca como resolvida ANTES de executar: dois toques rápidos não gravam duas vezes.
     const { data: claimed } = await client
@@ -43,9 +42,9 @@ export async function POST(req: NextRequest) {
       .eq('id', actionId)
       .eq('status', 'pending')
       .select('id')
-    if (!claimed?.length) return NextResponse.json({ error: 'Esta ação já foi resolvida' }, { status: 409 })
+    if (!claimed?.length) return Response.json({ error: 'Esta ação já foi resolvida' }, { status: 409 })
 
-    if (!confirmed) return NextResponse.json({ success: true, status: 'declined', message: 'Cancelado. Nada foi alterado.', refresh: [] })
+    if (!confirmed) return Response.json({ success: true, status: 'declined', message: 'Cancelado. Nada foi alterado.', refresh: [] })
 
     const params = (action.params ?? {}) as { payload?: unknown; today?: string; dow?: number }
     const expired = Date.now() - new Date(action.created_at).getTime() > PROPOSAL_TTL_MS
@@ -59,7 +58,7 @@ export async function POST(req: NextRequest) {
         result = await executeProposal(action.tool_name, params.payload ?? {}, { client, userId: user.id, ...date } satisfies CoachCtx)
       } catch (e) {
         console.error('[confirm] execute failed', e)
-        reportServerError(e, { route: 'chat/confirm', code: action.tool_name, userId: user.id })
+        await reportServerError(e, { route: 'chat/confirm', code: action.tool_name, userId: user.id })
         result = { success: false, message: 'Não consegui aplicar agora. Peça de novo em instantes.', refresh: [] }
       }
     }
@@ -69,10 +68,10 @@ export async function POST(req: NextRequest) {
     const status = result.success ? 'confirmed' : 'failed'
     await client.from('chat_pending_actions').update({ status, result_note: result.message }).eq('id', actionId)
 
-    return NextResponse.json({ ...result, status })
+    return Response.json({ ...result, status })
   } catch (err) {
     console.error('[POST /api/chat/confirm]', err)
-    reportServerError(err, { route: 'chat/confirm' })
-    return NextResponse.json({ error: 'Não consegui processar essa ação agora.' }, { status: 500 })
+    await reportServerError(err, { route: 'chat/confirm' })
+    return Response.json({ error: 'Não consegui processar essa ação agora.' }, { status: 500 })
   }
 }
