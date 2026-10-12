@@ -3,10 +3,9 @@ import { useRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
 import { Button, Card, ErrorBox, Field, Screen, Txt } from '@/components/ui';
-import { useAuth } from '@/lib/auth';
+import { MIN_PASSWORD, useAuth } from '@/lib/auth';
 import { spacing, useTheme } from '@/theme';
 
-const MIN_PASSWORD = 6;
 
 export default function SignupScreen() {
   const c = useTheme();

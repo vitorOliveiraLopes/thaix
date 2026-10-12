@@ -10,6 +10,8 @@ import {
   adjustTime,
   normalizeLevel,
   selectExercisesFromPool,
+  progressionWindow,
+  diversifyByMuscleGroup,
   EMPTY_PROFILE,
   isRestDay,
   type SkillExercise,
@@ -161,11 +163,11 @@ describe('selectExercisesFromPool', () => {
     ex('s1', 'skill', { reps: null, time_sec: 20 }), ex('s2', 'skill'),
   ]
 
-  it('respeita a composição do iniciante (2 core, 1 força, 2 skill)', () => {
+  it('respeita a composição do iniciante (2 abdômen, 2 força, 2 educativos)', () => {
     const sel = selectExercisesFromPool({ pool, level: 'iniciante', weekNumber: 1, seed: 7 })
-    expect(sel).toHaveLength(5)
+    expect(sel).toHaveLength(6)
     expect(sel.filter(e => e.category === 'core')).toHaveLength(2)
-    expect(sel.filter(e => e.category === 'forca')).toHaveLength(1)
+    expect(sel.filter(e => e.category === 'forca')).toHaveLength(2)
     expect(sel.filter(e => e.category === 'skill')).toHaveLength(2)
   })
 
@@ -192,6 +194,23 @@ describe('selectExercisesFromPool', () => {
     expect(sel.find(e => e.id === 's2')!.reps).toBe(9)
   })
 
+  it('completa abdômen e força com o nível abaixo quando o nível tem poucos', () => {
+    const adv = [ex('ac', 'core', { level: 'avancado' }), ex('af', 'forca', { level: 'avancado' }), ex('as', 'skill', { level: 'avancado' })]
+    const lower = [ex('ic', 'core', { level: 'intermediario' }), ex('if1', 'forca', { level: 'intermediario' }), ex('if2', 'forca', { level: 'intermediario' }), ex('is', 'skill', { level: 'intermediario' })]
+    const sel = selectExercisesFromPool({ pool: adv, lowerPool: lower, level: 'avancado', weekNumber: 1, seed: 3 })
+    expect(sel.filter(e => e.category === 'core').map(e => e.id).sort()).toEqual(['ac', 'ic'])
+    expect(sel.filter(e => e.category === 'forca')).toHaveLength(3)
+    // Educativo nunca vem de outro nível.
+    expect(sel.filter(e => e.category === 'skill').map(e => e.id)).toEqual(['as'])
+  })
+
+  it('não repete o mesmo exercício que existe nos dois níveis', () => {
+    const own = [ex('c1', 'core', { exercise_name: 'Hollow hold' })]
+    const lower = [ex('c0', 'core', { exercise_name: 'Hollow Hold', level: 'avancado' }), ex('c9', 'core', { exercise_name: 'Prancha' })]
+    const sel = selectExercisesFromPool({ pool: [...own, ex('s', 'skill')], lowerPool: lower, level: 'iniciante', weekNumber: 1, seed: 1 })
+    expect(sel.filter(e => e.category === 'core').map(e => e.id)).toEqual(['c1', 'c9'])
+  })
+
   it('trata nível desconhecido como iniciante', () => {
     expect(normalizeLevel('qualquer')).toBe('iniciante')
     expect(selectExercisesFromPool({ pool: [], level: 'avancado', weekNumber: 1, seed: 1 })).toEqual([])
@@ -206,5 +225,41 @@ describe('isRestDay', () => {
 
   it('sem dias escolhidos, nunca é descanso', () => {
     expect(isRestDay([], 0)).toBe(false)
+  })
+})
+
+describe('educativos em progressão', () => {
+  const eds = [4, 1, 3, 2].map(n => ({ id: `e${n}`, order_index: n }))
+
+  it('anda uma posição por treino concluído, na ordem da Thaís', () => {
+    expect(progressionWindow(eds, 0, 2).map(e => e.id)).toEqual(['e1', 'e2'])
+    expect(progressionWindow(eds, 1, 2).map(e => e.id)).toEqual(['e2', 'e3'])
+    expect(progressionWindow(eds, 3, 2).map(e => e.id)).toEqual(['e4', 'e1'])
+    expect(progressionWindow(eds, 4, 2).map(e => e.id)).toEqual(['e1', 'e2'])
+  })
+
+  it('com poucos educativos, usa todos', () => {
+    expect(progressionWindow(eds.slice(0, 1), 5, 2)).toHaveLength(1)
+  })
+
+  it('o gerador usa a janela do nível', () => {
+    const pool = [ex('c', 'core'), ex('x', 'skill', { order_index: 1 }), ex('y', 'skill', { order_index: 2 }), ex('z', 'skill', { order_index: 3 })]
+    const sel = selectExercisesFromPool({ pool, level: 'iniciante', weekNumber: 1, seed: 1, sessionsAtLevel: 1 })
+    expect(sel.filter(e => e.category === 'skill').map(e => e.id)).toEqual(['y', 'z'])
+  })
+})
+
+describe('grupos musculares na força', () => {
+  it('alterna os grupos mantendo a prioridade', () => {
+    const list = [
+      { id: 'o1', muscle_group: 'ombro' }, { id: 'o2', muscle_group: 'ombro' },
+      { id: 't1', muscle_group: 'triceps' }, { id: 'p1', muscle_group: 'peitoral' },
+    ]
+    expect(diversifyByMuscleGroup(list).map(e => e.id)).toEqual(['o1', 't1', 'p1', 'o2'])
+  })
+
+  it('sem grupo cadastrado, não mexe na ordem', () => {
+    const list: { id: string; muscle_group?: string | null }[] = [{ id: 'a' }, { id: 'b' }]
+    expect(diversifyByMuscleGroup(list)).toBe(list)
   })
 })

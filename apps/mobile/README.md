@@ -1,7 +1,11 @@
 # ThaixSkill — app (Expo)
 
-App iOS e Android do ThaixSkill, feito com Expo SDK 57 e Expo Router.
-As regras de treino vêm do pacote `@thaix/core` (`packages/core`), o mesmo que a API usa.
+App Android, site e API do ThaixSkill num projeto só, feito com Expo SDK 57 e Expo Router.
+As regras de treino vêm do pacote `@thaix/core` (`packages/core`).
+
+- **Telas:** `src/app/**` (Android e web, mesmo código).
+- **API:** `src/app/api/**/*+api.ts` (rotas de API do Expo Router) e `src/server/**`
+  (coach, autenticação, monitoramento). Roda só no servidor; telas nunca importam `src/server`.
 
 ## Antes do primeiro teste
 
@@ -14,8 +18,9 @@ As regras de treino vêm do pacote `@thaix/core` (`packages/core`), o mesmo que 
    copy .env.example .env.local
    ```
 
-   Preencha a **anon key** do Supabase. `EXPO_PUBLIC_API_URL` aponta para a API na Vercel
-   (conclusão de treino e chat). Nunca coloque a service role aqui: tudo com `EXPO_PUBLIC_` vai dentro do app.
+   Preencha a **anon key** do Supabase e `EXPO_PUBLIC_SITE_URL` (endereço do site, que também
+   é o da API). Para testar o coach localmente, preencha também `ANTHROPIC_API_KEY`.
+   Nunca coloque a service role aqui: tudo com `EXPO_PUBLIC_` vai dentro do app.
 
 ## Rodar no celular (Windows, CMD)
 
@@ -25,7 +30,7 @@ npx expo start
 ```
 
 Leia o QR code com a câmera (iPhone) ou com o Expo Go (Android). Se não conectar, use `npx expo start --tunnel`.
-O app é só iOS e Android: não aperte `w` nem abra o `localhost:8081` no navegador.
+Com `w` (ou `npx expo start --web`) abre o site em http://localhost:8081, já com a API.
 
 ## Gerar um APK para instalar no Android (EAS Build)
 
@@ -40,7 +45,7 @@ npx eas-cli@latest login
 npx eas-cli@latest init
 npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL --value https://SEU-PROJETO.supabase.co --visibility plaintext
 npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value SUA_CHAVE_ANON --visibility plaintext
-npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_API_URL --value https://thaix.vercel.app --visibility plaintext
+npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_SITE_URL --value https://thaix-web-mobile.vercel.app --visibility plaintext
 ```
 
 `init` cria o projeto no expo.dev e grava o `projectId` no `app.json` (commitar essa mudança).
@@ -65,26 +70,38 @@ arquivos `.web.tsx`/`.web.ts` ao lado do original (teclado, armazenamento da
 sessão, seletor de horário) e em `Platform.OS === 'web'` (vibração,
 confirmações, moldura centralizada no computador).
 
-Rodar localmente: `npx expo start --web` (abre em http://localhost:8081).
+Rodar localmente: `npx expo start --web` (abre em http://localhost:8081, com a API).
 
-### Publicar na Vercel (projeto separado da API)
+O site é gerado com `web.output: "server"`: o HTML de cada página sai no build e o app só
+desenha no navegador (a sessão fica no `localStorage`), como um app de página única.
 
-1. Na Vercel, **Add New → Project**, mesmo repositório, **Root Directory = `apps/mobile`**.
-   O `vercel.json` desta pasta já define build (`npx expo export -p web`), saída (`dist`) e as rotas.
-2. Variáveis do projeto: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`,
-   `EXPO_PUBLIC_API_URL` e, se quiser, `EXPO_PUBLIC_SENTRY_DSN`.
-3. No projeto **da API** (o Next, na raiz), adicione `WEB_APP_ORIGINS` com o endereço do
-   site (ex.: `https://thaix-app.vercel.app`). Sem isso o navegador bloqueia as chamadas
-   ao coach e à conclusão de treino (CORS).
-4. A redefinição de senha continua pela página `/reset-password` do projeto da API
-   (link do e-mail). Ao aposentar a web antiga, essa página precisa ficar.
+### Publicar na Vercel (um projeto: site + API)
+
+1. Projeto com o mesmo repositório e **Root Directory = `apps/mobile`**. O `vercel.json`
+   desta pasta define tudo: build (`npx expo export -p web`), arquivos estáticos
+   (`dist/client`) e a função `api/index.js`, que atende as rotas de API e as páginas.
+2. Variáveis do projeto:
+
+   | Variável | Para quê |
+   |---|---|
+   | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase (chave pública), no site e na API |
+   | `ANTHROPIC_API_KEY` | Coach (secreta, só servidor) |
+   | `COACH_MODEL`, `COACH_DAILY_LIMIT` | Modelo e limite diário de mensagens (opcionais) |
+   | `SENTRY_DSN` | Erros da API (opcional) |
+   | `EXPO_PUBLIC_SENTRY_DSN` | Erros do site (opcional) |
+
+   O site não precisa de `EXPO_PUBLIC_SITE_URL` (usa o próprio endereço) nem de CORS.
+3. A nova senha é feita no próprio app (tela `/redefinir-senha`, no Android e na web).
+   Cadastre `https://SEU-SITE/redefinir-senha` e `https://SEU-SITE/login` em
+   **Supabase → Authentication → URL Configuration → Redirect URLs**.
 
 ## Monitoramento de erros (Sentry)
 
 - **App (Android e web):** `EXPO_PUBLIC_SENTRY_DSN` no `.env.local`, no ambiente do EAS
   (`eas env:create --environment preview --name EXPO_PUBLIC_SENTRY_DSN ...`) e no projeto web
   da Vercel. Só liga fora do modo de desenvolvimento e envia apenas o id do aluno.
-- **API:** `SENTRY_DSN` no projeto da API na Vercel.
+- **API:** `SENTRY_DSN` no projeto da Vercel (envio direto ao Sentry, sem SDK; nunca manda o
+  conteúdo das mensagens nem o token).
 - No Android, o Sentry é uma biblioteca nativa: precisa de um APK novo.
 
 ## Estrutura
@@ -98,8 +115,12 @@ src/
 │  ├─ (tabs)/                Início, Desempenho, Técnicas, Coach, Perfil
 │  ├─ treino/[workoutId]     Execução do treino (séries, timer, esforço)
 │  ├─ skill/, prs, conquistas, tecnica/, ajustes/, paywall
+│  ├─ api/                   Rotas de API: chat, confirmação de ações, conclusão de treino
+│  └─ +html.tsx              Molde do HTML do site
+├─ server/                   Só servidor: coach (modelo, ferramentas, contexto), auth, Sentry
 ├─ components/               UI reutilizável (ui, inputs, sets, workouts, charts...)
 ├─ lib/                      Dados: Supabase, API, React Query e hooks por assunto
+api/index.js                 Função da Vercel que serve o build do servidor
 └─ theme.tsx                 Cores da marca, claro/escuro, tipografia
 ```
 
@@ -119,6 +140,7 @@ Regras de negócio não ficam aqui: ficam no `packages/core`, com testes (`npm t
   (otimista) em água, esforço e metas.
 - **Sessão no Keychain/Keystore** (`expo-secure-store`), dividida em pedaços por causa do limite de tamanho.
 - **API com o token do aluno:** `src/lib/api.ts` envia `Authorization: Bearer`; a API roda tudo sob RLS.
+  Na web o caminho é relativo (`/api/...`); no Android, `EXPO_PUBLIC_SITE_URL` + `/api/...`.
 - **Datas locais:** "hoje" é calculado no fuso do aparelho (`toLocalISODate`), não em UTC.
-- **Fora dos workspaces da raiz:** a raiz ainda é o Next com outra versão do React. O core entra por
+- **Fora dos workspaces da raiz:** o React Native fixa versões próprias de React. O core entra por
   link `file:` e o `metro.config.js` observa a pasta dele.

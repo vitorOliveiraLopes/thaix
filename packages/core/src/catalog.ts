@@ -131,3 +131,32 @@ export function nextOnboardingStep(step: OnboardingStep): OnboardingStep | typeo
   const i = ONBOARDING_STEPS.indexOf(step)
   return ONBOARDING_STEPS[i + 1] ?? ONBOARDING_DONE
 }
+
+// ─── Tipos de exercício (estrutura do treino da Thaís) ────────────────────────
+
+/** Como cada categoria do catálogo aparece para o aluno. */
+export const EXERCISE_CATEGORY_LABELS: Record<string, string> = {
+  core: 'Abdômen',
+  forca: 'Força',
+  skill: 'Educativo',
+  mobilidade: 'Mobilidade',
+}
+
+export const MUSCLE_GROUP_LABELS: Record<string, string> = {
+  dorsal: 'Dorsal',
+  ombro: 'Ombro',
+  triceps: 'Tríceps',
+  peitoral: 'Peitoral',
+  biceps: 'Bíceps',
+  antebraco: 'Antebraço',
+  abdomen: 'Abdômen',
+  lombar: 'Lombar',
+  quadril: 'Quadril',
+}
+
+/** "Força · Dorsal", "Educativo", "Abdômen". */
+export function exerciseKindLabel(e: { category: string; muscle_group?: string | null }): string {
+  const base = EXERCISE_CATEGORY_LABELS[e.category] ?? e.category
+  const group = e.category === 'forca' && e.muscle_group ? MUSCLE_GROUP_LABELS[e.muscle_group] : null
+  return group ? `${base} · ${group}` : base
+}

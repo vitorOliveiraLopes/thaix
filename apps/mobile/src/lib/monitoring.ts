@@ -1,5 +1,8 @@
 import * as Sentry from '@sentry/react-native';
 import type { ComponentType } from 'react';
+import { Platform } from 'react-native';
+
+import { siteUrl } from './site';
 
 /**
  * Monitoramento de erros (Sentry) no Android e na web.
@@ -9,8 +12,9 @@ import type { ComponentType } from 'react';
  * ou dados de treino: só o id do aluno, para agrupar erros da mesma pessoa.
  */
 const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
-const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? 'https://thaix.vercel.app').replace(/\/+$/, '');
-const enabled = !!dsn && !__DEV__;
+// Na web, o HTML das páginas é gerado no build (Node): lá não há o que monitorar.
+const inRuntime = Platform.OS !== 'web' || typeof window !== 'undefined';
+const enabled = !!dsn && !__DEV__ && inRuntime;
 
 if (enabled) {
   Sentry.init({
@@ -19,9 +23,9 @@ if (enabled) {
     sendDefaultPii: false,
     // Uma amostra das telas para medir lentidão; erros vão todos.
     tracesSampleRate: 0.1,
-    // Cabeçalhos de rastreio só nas chamadas à nossa API (liberados no CORS
-    // dela). Supabase e outros serviços não recebem cabeçalhos extras.
-    tracePropagationTargets: [apiUrl],
+    // Cabeçalhos de rastreio só nas chamadas à nossa API. Supabase e outros
+    // serviços não recebem cabeçalhos extras.
+    tracePropagationTargets: Platform.OS === 'web' ? [/^\/api\//] : [`${siteUrl()}/api/`],
   });
 }
 

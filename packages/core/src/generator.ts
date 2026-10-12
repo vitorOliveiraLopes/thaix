@@ -7,7 +7,7 @@
  * resultado. Comportamento idêntico ao src/lib/workout-generator.ts original.
  */
 
-import { buildWorkoutSelection, type Protocol } from './business-rules'
+import { WORKOUT_COMPOSITION, buildWorkoutSelection, type Protocol } from './business-rules'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -27,6 +27,10 @@ export type SkillExercise = {
   order_index: number
   /** Equipamentos necessários (ids de EQUIPMENT_OPTIONS). Vazio = nenhum. */
   equipment?: string[] | null
+  /** Grupo muscular do exercício de força (dorsal, ombro, triceps, peitoral…). */
+  muscle_group?: string | null
+  /** Vídeo curto com a explicação da Thaís (educativos). */
+  video_url?: string | null
 }
 
 /** Resultado de um exercício numa sessão concluída (linha de daily_workout_results). */
@@ -240,9 +244,50 @@ export function normalizeLevel(level: string): Protocol {
 }
 
 /**
+ * Reordena alternando grupos musculares (dorsal, ombro, tríceps…), mantendo a
+ * prioridade dentro de cada grupo: o bloco de força não sai com três
+ * exercícios do mesmo músculo quando há opções. Sem grupo cadastrado, a ordem
+ * não muda.
+ */
+export function diversifyByMuscleGroup<T extends { muscle_group?: string | null }>(list: T[]): T[] {
+  if (!list.some(e => e.muscle_group)) return list
+  const groups = new Map<string, T[]>()
+  for (const e of list) {
+    const key = e.muscle_group ?? '—'
+    groups.set(key, [...(groups.get(key) ?? []), e])
+  }
+  const queues = [...groups.values()]
+  const out: T[] = []
+  while (out.length < list.length) {
+    for (const q of queues) {
+      const next = q.shift()
+      if (next) out.push(next)
+    }
+  }
+  return out
+}
+
+/**
+ * Educativos em progressão: na ordem da Thaís (order_index), uma janela de
+ * `size` exercícios que avança uma posição a cada treino concluído no nível
+ * (A+B, depois B+C, depois C+D…) e recomeça ao fim da lista. Ao subir de
+ * nível o contador zera e a janela volta ao primeiro educativo do nível novo.
+ */
+export function progressionWindow<T extends { order_index: number }>(list: T[], step: number, size: number): T[] {
+  const ordered = [...list].sort((a, b) => a.order_index - b.order_index)
+  if (ordered.length <= size) return ordered
+  const start = ((Math.floor(step) % ordered.length) + ordered.length) % ordered.length
+  return Array.from({ length: size }, (_, i) => ordered[(start + i) % ordered.length])
+}
+
+/**
  * Escolhe e ajusta os exercícios do treino a partir do pool da skill no nível.
- * Ordena cada categoria por embaralhamento determinístico e depois pela
- * pontuação adaptativa (sort estável), e aplica a composição do nível.
+ *
+ * - Força (core + membros superiores): embaralhamento determinístico, depois
+ *   pontuação adaptativa (sort estável) e, na força, alternância de grupos
+ *   musculares. Se o nível tiver menos exercícios que o pedido, completa com
+ *   os do nível abaixo (`lowerPool`): o mínimo de 2 de abdômen vale sempre.
+ * - Educativos (skill): só do nível do aluno, em progressão (`sessionsAtLevel`).
  */
 export function selectExercisesFromPool<T extends SkillExercise>(params: {
   pool: T[]
@@ -250,23 +295,40 @@ export function selectExercisesFromPool<T extends SkillExercise>(params: {
   weekNumber: number
   seed: number
   profile?: AdaptiveProfile
+  /** Treinos concluídos no nível atual (avança os educativos). */
+  sessionsAtLevel?: number
+  /** Exercícios do nível abaixo, para completar core e força. */
+  lowerPool?: T[]
 }): T[] {
   const { pool, level, weekNumber, seed } = params
   const profile = params.profile ?? EMPTY_PROFILE
   if (pool.length === 0) return []
+  const protocol = normalizeLevel(level)
+  const [coreCount, forcaCount] = WORKOUT_COMPOSITION[protocol]
 
-  const prioritize = (category: ExerciseCategory) =>
-    seededShuffle(pool.filter(e => e.category === category), seed)
+  const prioritize = (source: T[], category: ExerciseCategory) =>
+    seededShuffle(source.filter(e => e.category === category), seed)
       .sort((a, b) => scoreExercise(b, profile) - scoreExercise(a, profile))
+
+  const withFallback = (category: ExerciseCategory, needed: number) => {
+    const own = prioritize(pool, category)
+    if (own.length >= needed || !params.lowerPool?.length) return own
+    const names = new Set(own.map(e => e.exercise_name.toLowerCase()))
+    return [...own, ...prioritize(params.lowerPool, category).filter(e => !names.has(e.exercise_name.toLowerCase()))]
+  }
 
   const selected = buildWorkoutSelection(
     {
-      core: prioritize('core'),
-      forca: prioritize('forca'),
-      mobilidade: prioritize('mobilidade'),
-      skill: prioritize('skill'),
+      core: withFallback('core', coreCount),
+      forca: diversifyByMuscleGroup(withFallback('forca', forcaCount)),
+      mobilidade: prioritize(pool, 'mobilidade'),
+      skill: progressionWindow(
+        pool.filter(e => e.category === 'skill'),
+        params.sessionsAtLevel ?? 0,
+        WORKOUT_COMPOSITION[protocol][3],
+      ),
     },
-    normalizeLevel(level),
+    protocol,
   )
 
   return selected.map(e => ({

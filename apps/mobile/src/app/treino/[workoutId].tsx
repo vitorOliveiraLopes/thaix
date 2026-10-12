@@ -4,6 +4,7 @@ import {
   bestRecorded,
   buildCompletionPayload,
   canAdvance,
+  exerciseKindLabel,
   emptySets,
   filledCount,
   logKey,
@@ -20,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AchievementModal } from '@/components/achievement-modal';
+import { ExerciseVideo } from '@/components/exercise-video';
 import { RepsSets, TimedSets } from '@/components/sets';
 import {
   Button,
@@ -292,7 +294,7 @@ function WorkoutSession({ workout }: { workout: Workout }) {
 
       <Card>
         <Txt variant="caption" color="primary" style={{ textTransform: 'uppercase' }}>
-          {item.exercise.category}
+          {exerciseKindLabel(item.exercise)}
         </Txt>
         <Txt variant="title">{item.exercise.exercise_name}</Txt>
         <Txt color="muted">
@@ -305,6 +307,7 @@ function WorkoutSession({ workout }: { workout: Workout }) {
             </Txt>
           </View>
         ) : null}
+        {item.exercise.video_url ? <ExerciseVideo key={item.exercise.id} url={item.exercise.video_url} /> : null}
       </Card>
 
       {timeBased ? (

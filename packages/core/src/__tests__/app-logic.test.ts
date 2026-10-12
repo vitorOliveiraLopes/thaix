@@ -154,3 +154,12 @@ describe('sessão de treino', () => {
     expect(formatClock(75)).toBe('01:15')
   })
 })
+
+describe('rótulos dos exercícios', () => {
+  it('mostra o tipo e o grupo muscular da força', async () => {
+    const { exerciseKindLabel } = await import('../index')
+    expect(exerciseKindLabel({ category: 'forca', muscle_group: 'dorsal' })).toBe('Força · Dorsal')
+    expect(exerciseKindLabel({ category: 'skill' })).toBe('Educativo')
+    expect(exerciseKindLabel({ category: 'core', muscle_group: 'abdomen' })).toBe('Abdômen')
+  })
+})

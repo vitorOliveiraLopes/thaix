@@ -1,6 +1,13 @@
+import { Platform } from 'react-native';
+
+import { siteUrl } from './site';
 import { supabase } from './supabase';
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'https://thaix.vercel.app').replace(/\/+$/, '');
+/**
+ * A API são as rotas do Expo Router em src/app/api, no mesmo endereço do site.
+ * Na web o caminho é relativo (mesmo domínio, sem CORS).
+ */
+const API_URL = Platform.OS === 'web' ? '' : siteUrl();
 
 export class ApiError extends Error {
   constructor(
@@ -17,6 +24,7 @@ export class ApiError extends Error {
  * tudo sob RLS com esse token.
  */
 export async function apiPost<T>(path: string, body: unknown, timeoutMs = 30_000): Promise<T> {
+  if (Platform.OS !== 'web' && !API_URL) throw new ApiError('App sem o endereço do servidor (EXPO_PUBLIC_SITE_URL).', 0);
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new ApiError('Sua sessão expirou. Entre de novo.', 401);

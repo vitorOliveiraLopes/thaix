@@ -1,4 +1,4 @@
-import { formatSetsTarget, parseRichText, skillIcon, skillName, type RichSpan, type WorkoutAttachment } from '@thaix/core';
+import { exerciseKindLabel, formatSetsTarget, parseRichText, skillIcon, skillName, type RichSpan, type WorkoutAttachment } from '@thaix/core';
 import { router } from 'expo-router';
 import { memo, useMemo } from 'react';
 import { StyleSheet, Text, View, type TextStyle } from 'react-native';
@@ -49,8 +49,6 @@ export const RichText = memo(function RichText({ text, color }: { text: string; 
 
 // ─── Card de treino ───────────────────────────────────────────────────────────
 
-const CATEGORY_LABEL: Record<string, string> = { mobilidade: 'Mobilidade', core: 'Core', forca: 'Força', skill: 'Skill' };
-
 /** Treino de hoje como estava na hora da mensagem, com atalho para o treino atual. */
 export const WorkoutAttachmentCard = memo(function WorkoutAttachmentCard({ workout }: { workout: WorkoutAttachment }) {
   const c = useTheme();
@@ -77,7 +75,7 @@ export const WorkoutAttachmentCard = memo(function WorkoutAttachmentCard({ worko
           <View style={styles.flex}>
             <Txt variant="label">{item.name}</Txt>
             <Txt variant="small" color="muted">
-              {CATEGORY_LABEL[item.category] ?? item.category}
+              {exerciseKindLabel(item)}
             </Txt>
           </View>
           <Txt variant="label" style={font.number}>
