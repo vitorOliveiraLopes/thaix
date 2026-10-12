@@ -60,7 +60,8 @@ function corsHeaders(origin: string): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+    // sentry-trace e baggage: o Sentry do app liga a chamada ao erro no servidor.
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, sentry-trace, baggage',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   }

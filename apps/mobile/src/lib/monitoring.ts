@@ -9,6 +9,7 @@ import type { ComponentType } from 'react';
  * ou dados de treino: só o id do aluno, para agrupar erros da mesma pessoa.
  */
 const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? 'https://thaix.vercel.app').replace(/\/+$/, '');
 const enabled = !!dsn && !__DEV__;
 
 if (enabled) {
@@ -18,6 +19,9 @@ if (enabled) {
     sendDefaultPii: false,
     // Uma amostra das telas para medir lentidão; erros vão todos.
     tracesSampleRate: 0.1,
+    // Cabeçalhos de rastreio só nas chamadas à nossa API (liberados no CORS
+    // dela). Supabase e outros serviços não recebem cabeçalhos extras.
+    tracePropagationTargets: [apiUrl],
   });
 }
 
