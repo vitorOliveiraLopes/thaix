@@ -35,6 +35,10 @@ export type WorkoutOp =
   | { type: 'remove'; order_index: number }
   | { type: 'set_sets'; order_index: number; sets: number }
   | { type: 'replace'; order_index: number; skill_exercise_id: string; sets: number; reps: number | null; time_sec: number | null }
+  /** Novo exercício no fim do treino, com a meta do catálogo. */
+  | { type: 'add'; skill_exercise_id: string; sets: number; reps: number | null; time_sec: number | null }
+  /** Meta pedida pelo aluno (o treino passa a contar como ajustado). */
+  | { type: 'set_target'; order_index: number; sets: number; reps: number | null; time_sec: number | null }
 
 export type WorkoutPlan = {
   ops: WorkoutOp[]
@@ -228,6 +232,15 @@ export function applyOps(items: PlanItem[], ops: WorkoutOp[], exercises: Record<
           ? { ...it, skill_exercise_id: op.skill_exercise_id, sets: op.sets, reps: op.reps, time_sec: op.time_sec, exercise: exercises[op.skill_exercise_id] ?? it.exercise }
           : it,
       )
+    if (op.type === 'set_target')
+      out = out.map(it => (it.order_index === op.order_index ? { ...it, sets: op.sets, reps: op.reps, time_sec: op.time_sec } : it))
+    if (op.type === 'add') {
+      const exercise = exercises[op.skill_exercise_id]
+      if (exercise) {
+        const order = out.reduce((m, it) => Math.max(m, it.order_index), 0) + 1
+        out = [...out, { order_index: order, skill_exercise_id: op.skill_exercise_id, sets: op.sets, reps: op.reps, time_sec: op.time_sec, exercise }]
+      }
+    }
   }
   return out
 }

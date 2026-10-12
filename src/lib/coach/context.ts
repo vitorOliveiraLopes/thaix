@@ -174,7 +174,7 @@ export function describeSnapshot(s: StudentSnapshot, ctx: CoachCtx): string {
         })
         .join('\n')
     : s.trainingDays.length && !s.trainingDays.includes(ctx.dow)
-      ? '- hoje é dia de descanso (o aluno pode tocar em "Treinar mesmo assim" na tela inicial)'
+      ? '- hoje é dia de descanso (se o aluno quiser treinar: create_workout, ou o botão "Treinar mesmo assim" na tela inicial)'
       : '- treino de hoje ainda não foi gerado (aparece ao abrir a tela inicial)'
 
   const box = s.boxLast7.length
