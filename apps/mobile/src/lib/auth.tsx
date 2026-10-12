@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { queryClient } from './query';
 import { supabase } from './supabase';
 import { setMonitoringUser } from './monitoring';
+import { authRedirectUrl } from './auth-links';
 
 type AuthResult = { error: string | null };
 
@@ -20,12 +21,16 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 /** Traduz os erros mais comuns do Supabase Auth para mensagens úteis ao aluno. */
+/** Mínimo de caracteres da senha (o mesmo do Supabase Auth). */
+export const MIN_PASSWORD = 6;
+
 export function authErrorMessage(message: string): string {
   const m = message.toLowerCase();
   if (m.includes('invalid login credentials')) return 'E-mail ou senha incorretos.';
   if (m.includes('email not confirmed')) return 'Confirme seu e-mail pelo link que enviamos antes de entrar.';
   if (m.includes('already registered')) return 'Já existe uma conta com esse e-mail. Tente entrar.';
-  if (m.includes('password should be at least')) return 'A senha precisa ter pelo menos 6 caracteres.';
+  if (m.includes('password should be at least')) return `A senha precisa ter pelo menos ${MIN_PASSWORD} caracteres.`;
+  if (m.includes('should be different')) return 'A senha nova precisa ser diferente da anterior.';
   if (m.includes('rate limit') || m.includes('too many')) return 'Muitas tentativas seguidas. Espere alguns minutos e tente de novo.';
   if (m.includes('network') || m.includes('fetch')) return 'Sem conexão com o servidor. Confira sua internet.';
   return 'Não foi possível concluir. Tente de novo em instantes.';
@@ -72,7 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { data: { full_name: name.trim() } },
+        // O link de confirmação volta para o login do app (ou do site).
+        options: { data: { full_name: name.trim() }, emailRedirectTo: authRedirectUrl('/login') },
       });
       return {
         error: error ? authErrorMessage(error.message) : null,
@@ -86,10 +92,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
 
     async resetPassword(email) {
-      // O link do e-mail abre a página de nova senha da versão web.
-      const base = (process.env.EXPO_PUBLIC_API_URL ?? 'https://thaix.vercel.app').replace(/\/+$/, '');
+      // O link do e-mail abre a tela de nova senha do próprio app.
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${base}/auth/callback?next=/reset-password`,
+        redirectTo: authRedirectUrl('/redefinir-senha'),
       });
       return { error: error ? authErrorMessage(error.message) : null };
     },

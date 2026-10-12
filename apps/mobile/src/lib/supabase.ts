@@ -28,3 +28,13 @@ AppState.addEventListener('change', (state) => {
   if (state === 'active') supabase.auth.startAutoRefresh();
   else supabase.auth.stopAutoRefresh();
 });
+
+/**
+ * Cliente avulso, sem guardar sessão: usado para trocar a senha com a sessão
+ * de recuperação do link do e-mail sem logar o app no meio do caminho.
+ */
+export function createIsolatedClient() {
+  return createClient(url!, anonKey!, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
