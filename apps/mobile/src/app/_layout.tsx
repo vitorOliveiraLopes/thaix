@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, type Theme } from 'expo-router';
+import Head from 'expo-router/head';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react';
@@ -176,6 +177,12 @@ function RootLayout() {
         <AppThemeProvider>
           <AuthProvider>
             <WebFrame>
+              {/* Web: nome na aba do navegador (sem isso ficava vazio). */}
+              {Platform.OS === 'web' && (
+                <Head>
+                  <title>ThaixSkill</title>
+                </Head>
+              )}
               <RootNavigator />
             </WebFrame>
           </AuthProvider>

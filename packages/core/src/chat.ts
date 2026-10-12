@@ -103,6 +103,26 @@ export function formatSetsTarget(item: { sets: number; reps: number | null; time
   return `${item.sets}×${item.time_sec ? `${item.time_sec}s` : `${item.reps ?? 0}`}`
 }
 
+/**
+ * O card em texto (lista "- **Nome**: 3×8"), para quando ele não pode ser
+ * salvo como card: o aluno nunca fica com um "👇" apontando para o nada.
+ */
+export function attachmentsAsText(attachments: ChatAttachment[]): string {
+  return attachments
+    .map(a => a.items.map(i => `- **${i.name}**: ${formatSetsTarget(i)}`).join('\n'))
+    .join('\n\n')
+}
+
+/**
+ * Início do dia (meia-noite em São Paulo, UTC−3, sem horário de verão desde
+ * 2019) em ISO UTC. O coach só lê a conversa do dia: o estado de longo prazo
+ * (nível, treinos, objetivos) já vai no contexto, e conversas antigas
+ * confundiam o modelo (ex.: "hoje é descanso" dito em outro dia).
+ */
+export function dayStartUtc(today: string): string {
+  return new Date(`${today}T00:00:00-03:00`).toISOString()
+}
+
 // ─── Texto com formatação leve ─────────────────────────────────────────────────
 
 export type RichSpan = { text: string; bold: boolean }

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { memo, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, TextInput, View, type NativeSyntheticEvent, type TextInputKeyPressEventData } from 'react-native';
 import { KeyboardAvoidingView } from '@/lib/keyboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -159,6 +159,13 @@ export default function ChatScreen() {
             placeholder="Digite sua mensagem..."
             placeholderTextColor={c.muted}
             multiline
+            numberOfLines={1}
+            onKeyPress={(e) => {
+              if (isSendKey(e)) {
+                e.preventDefault();
+                send(input);
+              }
+            }}
             maxLength={1000}
             style={[styles.input, { backgroundColor: c.surface, borderColor: c.border, color: c.text }]}
           />
@@ -175,6 +182,17 @@ export default function ChatScreen() {
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+/**
+ * Web: Enter envia e Shift+Enter quebra a linha, como nos chats do computador.
+ * No celular o Enter do teclado continua quebrando a linha (envia pelo botão).
+ * Ignora o Enter que confirma uma palavra no teclado de acentos/IME.
+ */
+function isSendKey(e: NativeSyntheticEvent<TextInputKeyPressEventData>): boolean {
+  if (Platform.OS !== 'web') return false;
+  const ev = e.nativeEvent as TextInputKeyPressEventData & { shiftKey?: boolean; isComposing?: boolean };
+  return ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing;
 }
 
 const Bubble = memo(function Bubble({ msg }: { msg: LocalMessage }) {
