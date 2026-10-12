@@ -2,7 +2,9 @@ import {
   EMERGENCY_REPLY,
   OFF_TOPIC_REPLY,
   actionHistoryLine,
+  attachmentsAsText,
   buildChatTimeline,
+  dayStartUtc,
   detectHealthConcern,
   detectOffTopic,
   isCoachTool,
@@ -52,18 +54,22 @@ function resolveDate(body: any): { today: string; dow: number } {
   return valid ? { today: body.today, dow: body.dow } : server
 }
 
-async function saveAssistant(ctx: CoachCtx, content: string, attachments: ChatAttachment[] = []) {
+/** Grava a resposta do coach e devolve o texto como ficou salvo. */
+async function saveAssistant(ctx: CoachCtx, content: string, attachments: ChatAttachment[] = []): Promise<string> {
   const row = { user_id: ctx.userId, role: 'assistant', content }
   if (attachments.length === 0) {
     await ctx.client.from('chat_messages').insert(row)
-    return
+    return content
   }
   const { error } = await ctx.client.from('chat_messages').insert({ ...row, attachments })
-  // Sem a coluna (SQL ainda não rodado), a mensagem não pode se perder.
-  if (error) {
-    console.error('[coach] attachments not saved', error.message)
-    await ctx.client.from('chat_messages').insert(row)
-  }
+  if (!error) return content
+  // Sem a coluna attachments (supabase/sql/chat_attachments.sql não rodado):
+  // o card vira lista no texto, para o aluno não ficar com um "👇" sem nada.
+  console.error('[coach] attachments not saved', error.message)
+  await reportServerError(new Error(`attachments not saved: ${error.message}`), { route: 'chat', code: 'attachments_not_saved', userId: ctx.userId })
+  const withList = `${content}\n\n${attachmentsAsText(attachments)}`
+  await ctx.client.from('chat_messages').insert({ ...row, content: withList })
+  return withList
 }
 
 // ─── POST /api/chat ───────────────────────────────────────────────────────────
@@ -120,6 +126,8 @@ export async function POST(req: Request) {
         // '*': funciona antes e depois da coluna attachments existir.
         .select('*')
         .eq('user_id', user.id)
+        // Só a conversa de hoje: o resto do que importa já está no contexto.
+        .gte('created_at', dayStartUtc(ctx.today))
         .order('created_at', { ascending: false })
         .limit(HISTORY_SIZE),
       loadSnapshot(ctx),
@@ -255,9 +263,9 @@ export async function POST(req: Request) {
       texts.join('\n\n') ||
       (pending.length ? proposalReply(pending.map(p => p.summary)) : attachments.length ? 'Aqui está o seu treino de hoje 👇' : proposalReply([]))
     console.info('[coach] done', { user: user.id, ms: Date.now() - started, proposals: pending.length, cards: attachments.length })
-    await saveAssistant(ctx, reply, attachments)
+    const saved = await saveAssistant(ctx, reply, attachments)
 
-    return Response.json({ message: reply, pendingActions: pending, attachments })
+    return Response.json({ message: saved, pendingActions: pending, attachments })
   } catch (err) {
     const info = describeCoachError(err)
     console.error('[POST /api/chat]', info.code, err)

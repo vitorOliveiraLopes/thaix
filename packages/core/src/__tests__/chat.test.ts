@@ -3,6 +3,8 @@ import {
   PROPOSAL_TTL_MS,
   actionHistoryLine,
   actionState,
+  attachmentsAsText,
+  dayStartUtc,
   buildChatTimeline,
   formatSetsTarget,
   parseAttachments,
@@ -77,5 +79,20 @@ describe('texto do coach', () => {
     expect(parseAttachments([{ type: 'x' }, { type: 'workout', items: [] }])).toHaveLength(1)
     expect(formatSetsTarget({ sets: 3, reps: 8, time_sec: null })).toBe('3×8')
     expect(formatSetsTarget({ sets: 4, reps: null, time_sec: 30 })).toBe('4×30s')
+  })
+})
+
+describe('card em texto e conversa do dia', () => {
+  it('card vira lista com séries×reps ou tempo', () => {
+    const text = attachmentsAsText([
+      { type: 'workout', workout_id: 'w', skill_id: 'pull-up', week_number: 1, completed: false, minutes: 20,
+        items: [{ name: 'Remada', category: 'forca', sets: 3, reps: 8, time_sec: null }, { name: 'Hollow', category: 'core', sets: 3, reps: null, time_sec: 30 }] },
+    ])
+    expect(text).toBe('- **Remada**: 3×8\n- **Hollow**: 3×30s')
+    expect(parseRichText(text).map(b => b.type)).toEqual(['bullet', 'bullet'])
+  })
+
+  it('o dia começa à meia-noite de São Paulo (03:00 UTC)', () => {
+    expect(dayStartUtc('2026-10-12')).toBe('2026-10-12T03:00:00.000Z')
   })
 })
