@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { forwardRef, memo, type ComponentProps, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -16,7 +15,8 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { selectionFeedback } from '@/lib/haptics';
+import { KeyboardAvoidingView } from '@/lib/keyboard';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { font, levelColors, radius, spacing, useTheme } from '@/theme';
@@ -26,7 +26,7 @@ export type IconName = ComponentProps<typeof Ionicons>['name'];
 
 /** Toque leve de confirmação. Falhas (aparelho sem motor) são ignoradas. */
 export function tapFeedback() {
-  Haptics.selectionAsync().catch(() => {});
+  selectionFeedback();
 }
 
 // ─── Texto ────────────────────────────────────────────────────────────────────

@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { activeSetIndex, adjustSet, formatClock, setValueAt, type SetValues } from '@thaix/core';
-import * as Haptics from 'expo-haptics';
 import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { StepButton } from '@/components/inputs';
 import { Button, Card, ProgressBar, Txt, tapFeedback } from '@/components/ui';
 import { font, radius, spacing, useTheme } from '@/theme';
+import { successFeedback } from '@/lib/haptics';
 
 // ─── Repetições por série ─────────────────────────────────────────────────────
 //
@@ -120,7 +120,7 @@ export function TimedSets({
       const sec = Math.floor((Date.now() - t0) / 1000);
       setElapsed(sec);
       if (sec >= latest.current.targetSec) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        successFeedback();
         commit(latest.current.targetSec);
       }
     }, 250);
