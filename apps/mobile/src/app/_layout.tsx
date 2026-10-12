@@ -92,9 +92,6 @@ function RootNavigator() {
           headerBackButtonDisplayMode: 'minimal',
         }}
       >
-        {/* Link do e-mail de nova senha: abre logado ou não. */}
-        <Stack.Screen name="redefinir-senha" />
-
         <Stack.Protected guard={!loggedIn}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
@@ -120,6 +117,13 @@ function RootNavigator() {
           <Stack.Screen name="ajustes/assinatura" options={{ headerShown: true, title: 'Planos' }} />
           <Stack.Screen name="ajustes/suporte" options={{ headerShown: true, title: 'Ajuda e suporte' }} />
         </Stack.Protected>
+
+        {/*
+          Link do e-mail de nova senha: abre logado ou não. Fica por ÚLTIMO: quando
+          o acesso muda (entrar, sair, abrir "/"), o roteador vai para a primeira
+          tela permitida na ordem daqui, e ela nunca pode ser essa.
+        */}
+        <Stack.Screen name="redefinir-senha" />
       </Stack>
     </ThemeProvider>
   );
