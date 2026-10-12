@@ -67,10 +67,13 @@ describe('buildWorkoutSelection', () => {
     skill: Array.from({ length: skill }, (_, i) => `skill-${i}`),
   })
 
-  it('iniciante com pool completo gera 5 exercícios sem repetição', () => {
-    const pool = makePool(3, 5, 0, 2)
+  it('iniciante: 4 de força (2 abdômen + 2 membros superiores) + 2 educativos', () => {
+    const pool = makePool(3, 5, 0, 3)
     const result = buildWorkoutSelection(pool, 'iniciante')
-    expect(result).toHaveLength(5)
+    expect(result).toHaveLength(6)
+    expect(result.filter(x => x.startsWith('core-'))).toHaveLength(2)
+    expect(result.filter(x => x.startsWith('forca-'))).toHaveLength(2)
+    expect(result.filter(x => x.startsWith('skill-'))).toHaveLength(2)
     expect(new Set(result).size).toBe(result.length)
   })
 
@@ -82,10 +85,15 @@ describe('buildWorkoutSelection', () => {
     expect(new Set(result).size).toBe(result.length)
   })
 
-  it('intermediário com pool completo gera 6 exercícios', () => {
+  it('intermediário e avançado: 5 de força (2 abdômen + 3 membros superiores) + 2 educativos', () => {
     const pool = makePool(2, 4, 0, 2)
-    const result = buildWorkoutSelection(pool, 'intermediario')
-    expect(result).toHaveLength(6)
+    for (const level of ['intermediario', 'avancado'] as const) {
+      const result = buildWorkoutSelection(pool, level)
+      expect(result).toHaveLength(7)
+      expect(result.filter(x => x.startsWith('forca-'))).toHaveLength(3)
+      // Educativos no fim do treino.
+      expect(result.slice(-2).every(x => x.startsWith('skill-'))).toBe(true)
+    }
   })
 })
 

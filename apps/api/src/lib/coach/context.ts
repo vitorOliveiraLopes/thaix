@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   calculateStreak,
   estimateWorkoutMinutes,
+  exerciseKindLabel,
   skillName,
   type PlanItem,
 } from '@thaix/core'
@@ -58,8 +59,9 @@ export function daysAgo(iso: string, n: number): string {
   return t.toISOString().slice(0, 10)
 }
 
+// skill_exercises(*): funciona antes e depois das colunas novas (muscle_group, video_url).
 const ITEM_SELECT =
-  'id, skill_id, week_number, completed_at, daily_workout_items(order_index, skill_exercise_id, sets, reps, time_sec, skill_exercises(id, exercise_name, category, level, skill_id, rest_sec, note, equipment))'
+  'id, skill_id, week_number, completed_at, daily_workout_items(order_index, skill_exercise_id, sets, reps, time_sec, skill_exercises(*))'
 
 export async function loadTodayWorkouts(ctx: CoachCtx): Promise<TodayWorkout[]> {
   const { data, error } = await ctx.client
@@ -169,7 +171,7 @@ export function describeSnapshot(s: StudentSnapshot, ctx: CoachCtx): string {
     ? s.today
         .map(w => {
           const mins = estimateWorkoutMinutes(w.items)
-          const list = w.items.map(i => `${i.order_index}. ${i.exercise.exercise_name} [${i.exercise.category}] ${i.sets}×${i.time_sec ? `${i.time_sec}s` : `${i.reps} reps`}`).join('; ')
+          const list = w.items.map(i => `${i.order_index}. ${i.exercise.exercise_name} [${exerciseKindLabel(i.exercise)}] ${i.sets}×${i.time_sec ? `${i.time_sec}s` : `${i.reps} reps`}`).join('; ')
           return `- ${skillName(w.skill_id)} (${w.completed ? 'CONCLUÍDO' : 'pendente'}, ~${mins} min): ${list}`
         })
         .join('\n')

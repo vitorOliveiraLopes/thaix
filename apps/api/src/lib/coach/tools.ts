@@ -6,6 +6,7 @@ import {
   MIN_TRAINING_DAYS,
   SESSION_MINUTES_OPTIONS,
   LEVEL_LABELS,
+  exerciseKindLabel,
   applyOps,
   catalogTarget,
   formatSetsTarget,
@@ -63,6 +64,7 @@ export async function buildDisplay(name: string, input: Record<string, unknown>,
     items: w.items.map(i => ({
       name: i.exercise.exercise_name,
       category: i.exercise.category,
+      muscle_group: (i.exercise as { muscle_group?: string | null }).muscle_group ?? null,
       sets: i.sets,
       reps: i.reps,
       time_sec: i.time_sec,
@@ -244,7 +246,7 @@ async function exerciseGuide(ctx: CoachCtx, query: string) {
   if (query.trim().length < 2) return { error: 'Informe o nome do exercício.' }
   const { data } = await ctx.client
     .from('skill_exercises')
-    .select('id, exercise_name, category, level, skill_id, sets, reps, time_sec, rest_sec, note, equipment')
+    .select('*')
     .ilike('exercise_name', `%${query.trim()}%`)
     .limit(3)
   const ex = (data ?? [])[0] as any
@@ -263,6 +265,8 @@ async function exerciseGuide(ctx: CoachCtx, query: string) {
     level: ex.level,
     base_dose: `${ex.sets}×${ex.time_sec ? `${ex.time_sec}s` : `${ex.reps} reps`}, descanso ${ex.rest_sec}s`,
     equipment: ex.equipment ?? [],
+    kind: exerciseKindLabel(ex),
+    has_video: !!ex.video_url,
     coach_note: ex.note,
     knowledge: knowledge ?? [],
     easier: (related ?? []).filter((r: any) => levels.indexOf(r.level) < li).map((r: any) => r.exercise_name),

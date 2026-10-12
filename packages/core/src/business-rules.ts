@@ -27,17 +27,22 @@ export function recommendProtocol(pushups: number, pullups: number, squats: numb
 
 // ─── Geração de treino: composição e seleção sem repetição ──────────────────
 
+/**
+ * Estrutura do treino (Coach Thaís): bloco de força com 4–5 exercícios,
+ * sendo 2 de abdômen (core) e o resto de membros superiores específicos da
+ * skill (forca), e no final 2 educativos da skill no nível do aluno.
+ */
 export const EXERCISE_COUNT: Record<Protocol, number> = {
-  iniciante: 5,
-  intermediario: 6,
-  avancado: 4,
+  iniciante: 6,
+  intermediario: 7,
+  avancado: 7,
 }
 
 // [core, forca, mobilidade, skill]
 export const WORKOUT_COMPOSITION: Record<Protocol, [number, number, number, number]> = {
-  iniciante: [2, 1, 0, 2],
-  intermediario: [2, 2, 0, 2],
-  avancado: [1, 1, 0, 2],
+  iniciante: [2, 2, 0, 2],
+  intermediario: [2, 3, 0, 2],
+  avancado: [2, 3, 0, 2],
 }
 
 /**

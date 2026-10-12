@@ -84,7 +84,7 @@ export type WorkoutAttachment = {
   completed: boolean
   /** Duração estimada no momento da mensagem. */
   minutes: number
-  items: { name: string; category: string; sets: number; reps: number | null; time_sec: number | null }[]
+  items: { name: string; category: string; muscle_group?: string | null; sets: number; reps: number | null; time_sec: number | null }[]
 }
 
 export type ChatAttachment = WorkoutAttachment

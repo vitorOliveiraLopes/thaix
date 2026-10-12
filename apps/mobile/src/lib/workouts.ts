@@ -2,6 +2,7 @@ import {
   applyOps,
   buildAdaptiveProfile,
   filterByEquipment,
+  previousLevel,
   fitWorkoutToMinutes,
   selectExercisesFromPool,
   selectSkillsForToday,
@@ -149,7 +150,7 @@ async function doGenerate(userId: string, today: string): Promise<Workout[]> {
 
   const { data: progress, error } = await supabase
     .from('user_skill_progress')
-    .select('skill_id, level, week_number')
+    .select('skill_id, level, week_number, sessions_at_current_level')
     .eq('user_id', userId);
   if (error) throw new Error(error.message);
   if (!progress || progress.length === 0) return existing;
@@ -182,8 +183,9 @@ async function doGenerate(userId: string, today: string): Promise<Workout[]> {
     const current = existing.find((w) => w.skill_id === skillId);
     if (current && current.items.length > 0) continue;
 
-    const [{ data: pool, error: poolError }, profile] = await Promise.all([
-      supabase.from('skill_exercises').select('*').eq('skill_id', skillId).eq('level', p.level).order('order_index'),
+    // Todos os níveis da skill: o do aluno e o de baixo (completa abdômen e força).
+    const [{ data: catalog, error: poolError }, profile] = await Promise.all([
+      supabase.from('skill_exercises').select('*').eq('skill_id', skillId).order('order_index'),
       fetchAdaptiveProfile(userId, skillId),
     ]);
     if (poolError) throw new Error(poolError.message);
@@ -191,14 +193,20 @@ async function doGenerate(userId: string, today: string): Promise<Workout[]> {
     const weekNumber = current?.week_number ?? p.week_number;
     // Só o que dá para fazer com o equipamento do aluno. Sem nada compatível,
     // cai no pool completo (melhor treinar com escala do que não treinar).
-    const fullPool = (pool ?? []) as SkillExercise[];
-    const usable = filterByEquipment(fullPool, equipment);
+    const all = (catalog ?? []) as SkillExercise[];
+    const usableOf = (level: string | null) => {
+      const lvl = all.filter((e) => e.level === level);
+      const usable = filterByEquipment(lvl, equipment);
+      return usable.length > 0 ? usable : lvl;
+    };
     const selected = selectExercisesFromPool({
-      pool: usable.length > 0 ? usable : fullPool,
+      pool: usableOf(p.level),
+      lowerPool: usableOf(previousLevel(p.level)),
       level: p.level,
       weekNumber,
       seed: workoutSeed(userId, today, weekNumber),
       profile,
+      sessionsAtLevel: (p.sessions_at_current_level as number | null) ?? 0,
     });
     if (selected.length === 0) continue;
 

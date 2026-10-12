@@ -1,5 +1,27 @@
 # Pendências para validar com a Coach Thaís
 
+## Estrutura do treino (pedido da Thaís, já no app)
+
+Cada treino de skill agora sai assim:
+
+1. **Bloco de força:** 4 exercícios no iniciante, 5 no intermediário e avançado.
+   Sempre **2 de abdômen** (`category = 'core'`) e o resto de **membros superiores da skill**
+   (`category = 'forca'`): puxadas (pull-up, C2B, BMU) = dorsal; HSPU = ombro, tríceps e peitoral.
+   Se o nível tiver poucos exercícios, o app completa com os do nível abaixo.
+2. **No final, 2 educativos** (`category = 'skill'`) **do nível do aluno**, na ordem da progressão
+   (`order_index`). A cada treino concluído no nível, a dupla avança uma posição
+   (1+2 → 2+3 → 3+4…); ao subir de nível, recomeça do primeiro educativo do nível novo.
+
+O que falta da Thaís para isso ficar redondo:
+
+- [ ] **Educativos por nível e em ordem:** dizer quais educativos são de cada nível e a sequência (vira `level` e `order_index`).
+- [ ] **Grupo muscular da força:** marcar cada exercício de força (`muscle_group`: dorsal, ombro, triceps, peitoral, biceps, antebraco). Com isso o treino alterna os músculos (HSPU não sai com três de ombro).
+- [ ] **Vídeos cortados:** um vídeo curto por educativo, com a explicação dela (vira `video_url`; o botão "Ver vídeo da Thaís" aparece sozinho na tela do treino).
+- [ ] **Quantidade mínima por skill e nível:** 2 de abdômen, 3 de força e 2 educativos (ideal: mais, para variar). O `supabase/sql/estrutura_treino.sql` mostra o que falta.
+- [ ] **Dias com 2 skills:** hoje cada skill do dia tem o próprio treino completo (até 14 exercícios no dia). Prefere dividir (ex.: um bloco de força só, com os educativos das duas skills)?
+- [ ] **T2B:** quais são os "membros superiores" do toes-to-bar (dorsal/pegada? só abdômen?).
+- [ ] **Mobilidade/aquecimento:** não entra no treino gerado. Deve entrar no começo?
+
 Pontos de regra de treino que o código já implementa de algum jeito, mas que precisam da palavra final dela antes do coach (Fase 2) usar como verdade.
 
 ## Regras de progressão

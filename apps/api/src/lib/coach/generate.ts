@@ -2,6 +2,7 @@ import {
   applyOps,
   buildAdaptiveProfile,
   filterByEquipment,
+  previousLevel,
   fitWorkoutToMinutes,
   selectExercisesFromPool,
   workoutSeed,
@@ -27,25 +28,33 @@ export async function planGeneratedWorkout(
 ): Promise<{ level: string; weekNumber: number; items: PlanItem[] } | { error: string }> {
   const c = ctx.client
   const [{ data: progress }, { data: routine }] = await Promise.all([
-    c.from('user_skill_progress').select('level, week_number').eq('user_id', ctx.userId).eq('skill_id', skillId).maybeSingle(),
+    c.from('user_skill_progress').select('level, week_number, sessions_at_current_level').eq('user_id', ctx.userId).eq('skill_id', skillId).maybeSingle(),
     c.from('onboarding_responses').select('equipment').eq('user_id', ctx.userId).maybeSingle(),
   ])
   if (!progress) return { error: 'Essa skill não está nas trilhas do aluno. Use add_skill antes.' }
 
-  const [{ data: pool, error: poolError }, profile] = await Promise.all([
-    c.from('skill_exercises').select('*').eq('skill_id', skillId).eq('level', progress.level).order('order_index'),
+  const [{ data: catalog, error: poolError }, profile] = await Promise.all([
+    c.from('skill_exercises').select('*').eq('skill_id', skillId).order('order_index'),
     adaptiveProfile(ctx, skillId),
   ])
   if (poolError) return { error: poolError.message }
 
-  const fullPool = (pool ?? []) as SkillExercise[]
-  const usable = filterByEquipment(fullPool, (routine?.equipment as string[] | null) ?? [])
+  // Igual ao app: nível do aluno, com o de baixo para completar abdômen e força.
+  const all = (catalog ?? []) as SkillExercise[]
+  const equipment = (routine?.equipment as string[] | null) ?? []
+  const usableOf = (level: string | null) => {
+    const lvl = all.filter(e => e.level === level)
+    const usable = filterByEquipment(lvl, equipment)
+    return usable.length > 0 ? usable : lvl
+  }
   const selected = selectExercisesFromPool({
-    pool: usable.length > 0 ? usable : fullPool,
+    pool: usableOf(progress.level),
+    lowerPool: usableOf(previousLevel(progress.level)),
     level: progress.level,
     weekNumber: progress.week_number,
     seed: workoutSeed(ctx.userId, ctx.today, progress.week_number),
     profile,
+    sessionsAtLevel: progress.sessions_at_current_level ?? 0,
   })
   if (selected.length === 0) return { error: 'Não há exercícios cadastrados para esse nível.' }
 
